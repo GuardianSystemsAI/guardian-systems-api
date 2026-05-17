@@ -1,0 +1,23 @@
+{
+  "name": "guardian-systems-api",
+  "version": "1.0.0",
+  "description": "Backend API proxy server for Guardian Systems apps — StreetSense, TrapTrack, Sentinel",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  },
+  "keywords": ["guardian-systems", "streetsense", "traptrack", "sentinel"],
+  "author": "Guardian Systems LLC"
+}
