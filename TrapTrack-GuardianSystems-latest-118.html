@@ -1,0 +1,1861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>TrapTrack by Guardian Systems</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>.leaflet-container{font-family:'Courier New',monospace;background:#030a06}.leaflet-popup-content-wrapper{background:#050f08;color:#c8f0d8;border:1px solid #1a4a2a;border-radius:8px}.leaflet-popup-tip{background:#050f08}.leaflet-popup-content{font-size:11px;line-height:16px}.leaflet-bar a{background:#050f08!important;color:#00ff88!important;border-color:#1a4a2a!important}</style>
+  <style>* { margin:0; padding:0; box-sizing:border-box; } body { background:#030a06; overflow-x:hidden; }</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+const { useState } = React;
+
+const T = {
+  bg: "#030a06", deep: "#020604", card: "#050f08", border: "#1a4a2a",
+  text: "#c8f0d8", primary: "#00ff88", red: "#ff3333", blue: "#00cfff", amber: "#ffaa00",
+};
+
+const sc = (s) => s === "triggered" ? T.red : s === "active" ? T.primary : T.blue;
+
+const TRAP_RANK = {
+  "snap-mouse":1,"snap-rat":2,"cage-small":3,"door-small":4,"cage-medium":5,
+  "door-medium":6,"cage-large":7,"door-large":8,"cage-xl":9,"snare":10,"foothold":11,"cage":12
+};
+const TRAP_LBL = {
+  "cage-xl":"XL Cage","cage-large":"Large Cage","cage-medium":"Med Cage","cage-small":"Small Cage",
+  "door-large":"Large 1-Way","door-medium":"Med 1-Way","door-small":"Small 1-Way",
+  "snap-rat":"Snap (Rat)","snap-mouse":"Snap (Mouse)","snare":"Snare","foothold":"Foothold","cage":"Cage"
+};
+
+function PawPrint({ fp, color, sz }) {
+  const c = color || T.primary;
+  const s = sz || 72;
+  if (!fp) return <span style={{ fontSize: s * 0.5, display: "block", textAlign: "center" }}>🐾</span>;
+  if (fp === "raccoon") return (
+    <svg width={s} height={s} viewBox="0 0 90 100" fill={c} opacity="0.9">
+      <ellipse cx="45" cy="75" rx="22" ry="16" />
+      <ellipse cx="11" cy="44" rx="6" ry="13" transform="rotate(-22,11,44)" />
+      <ellipse cx="27" cy="29" rx="6" ry="14" transform="rotate(-9,27,29)" />
+      <ellipse cx="45" cy="24" rx="6" ry="14" />
+      <ellipse cx="63" cy="29" rx="6" ry="14" transform="rotate(9,63,29)" />
+      <ellipse cx="79" cy="44" rx="6" ry="13" transform="rotate(22,79,44)" />
+    </svg>
+  );
+  if (fp === "opossum") return (
+    <svg width={s} height={s} viewBox="0 0 90 100" fill={c} opacity="0.9">
+      <ellipse cx="45" cy="72" rx="22" ry="16" />
+      <ellipse cx="14" cy="44" rx="6" ry="11" transform="rotate(-28,14,44)" />
+      <ellipse cx="30" cy="30" rx="6" ry="12" transform="rotate(-10,30,30)" />
+      <ellipse cx="48" cy="26" rx="6" ry="12" transform="rotate(10,48,26)" />
+      <ellipse cx="64" cy="32" rx="6" ry="11" transform="rotate(25,64,32)" />
+      <ellipse cx="78" cy="60" rx="5" ry="8" transform="rotate(50,78,60)" />
+    </svg>
+  );
+  if (fp === "mole") return (
+    <svg width={s} height={s} viewBox="0 0 90 90" fill={c} opacity="0.9">
+      <ellipse cx="45" cy="52" rx="26" ry="22" />
+      {[0,45,90,135,180,225,270,315].map((deg, i) => {
+        const a = deg * Math.PI / 180;
+        const px = 45 + 36 * Math.cos(a);
+        const py = 52 + 28 * Math.sin(a);
+        return <ellipse key={i} cx={px} cy={py} rx="5" ry="9" transform={`rotate(${deg},${px},${py})`} />;
+      })}
+    </svg>
+  );
+  if (fp === "beaver") return (
+    <svg width={s} height={s} viewBox="0 0 100 95" fill={c} opacity="0.9">
+      <ellipse cx="50" cy="62" rx="32" ry="20" />
+      {[[-30,38],[-13,27],[7,24],[27,27],[44,38]].map(([a, r], i) => {
+        const rad = a * Math.PI / 180;
+        const tx = 50 + r * Math.sin(rad);
+        const ty = 62 - r * Math.cos(rad);
+        return <ellipse key={i} cx={tx} cy={ty} rx="7" ry="11" transform={`rotate(${a},${tx},${ty})`} />;
+      })}
+      <path d="M22,44 Q38,54 50,28 Q62,54 78,44" fill="none" stroke={c} strokeWidth="2" opacity="0.5" />
+    </svg>
+  );
+  if (fp === "bat") return (
+    <svg width={s} height={s} viewBox="0 0 90 70" fill={c} opacity="0.9">
+      <ellipse cx="45" cy="18" rx="12" ry="9" />
+      <path d="M10,42 Q22,26 33,36 Q45,20 57,36 Q68,26 80,42" fill="none" stroke={c} strokeWidth="2.5" />
+      <text x="45" y="60" textAnchor="middle" fontSize="8" fill={c} fontFamily="monospace">GUANO AT ENTRY</text>
+    </svg>
+  );
+  const { toes = 4, claws = false, wide = false, elongated = false } = fp;
+  const pRx = wide ? 24 : 18;
+  const tRy = elongated ? 13 : 8;
+  const spread = (wide ? 75 : toes === 5 ? 65 : 55) * Math.PI / 180;
+  const els = [];
+  for (let i = 0; i < toes; i++) {
+    const a = -spread / 2 + (spread / (toes - 1)) * i;
+    const tx = 45 + 31 * Math.sin(a);
+    const ty = 75 - 40 - Math.abs(Math.cos(a)) * 4;
+    const deg = a * 180 / Math.PI;
+    els.push(<ellipse key={i} cx={tx} cy={ty} rx="5" ry={tRy} transform={`rotate(${deg},${tx},${ty})`} />);
+    if (claws) els.push(<line key={"c"+i} x1={tx+Math.sin(a)*5} y1={ty-tRy-2} x2={tx+Math.sin(a)*9} y2={ty-tRy-9} stroke={c} strokeWidth="1.5" strokeLinecap="round" />);
+  }
+  return (
+    <svg width={s} height={s} viewBox="0 0 90 95" fill={c} opacity="0.9">
+      <ellipse cx="45" cy="75" rx={pRx} ry="15" />
+      {els}
+    </svg>
+  );
+}
+
+function TrapIcon({ type, size }) {
+  const sz = size || 46;
+  const p = T.primary;
+  const d = T.border;
+  if (type === "snap-mouse" || type === "snap-rat") {
+    const w = type === "snap-rat" ? 48 : 40;
+    const x0 = (60 - w) / 2;
+    return (
+      <svg width={sz} height={sz} viewBox="0 0 60 60">
+        <rect x={x0} y="36" width={w} height="10" rx="2" fill={p} opacity="0.3" />
+        <rect x={x0} y="36" width={w} height="10" rx="2" fill="none" stroke={p} strokeWidth="1.5" />
+        <path d={`M${x0+4},36 Q30,${type==="snap-rat"?14:18} ${x0+w-4},36`} fill="none" stroke={p} strokeWidth="2.5" />
+        <circle cx="30" cy="35" r="3.5" fill={d} />
+      </svg>
+    );
+  }
+  if (type.startsWith("cage") || type === "cage") {
+    const wMap = {"cage-small":36,"cage-medium":42,"cage-large":48,"cage-xl":54,"cage":44};
+    const hMap = {"cage-small":20,"cage-medium":24,"cage-large":28,"cage-xl":30,"cage":24};
+    const w = wMap[type] || 44;
+    const h = hMap[type] || 24;
+    const x0 = (60-w)/2, y0 = (60-h)/2;
+    const bars = type==="cage-xl"?6:type==="cage-large"?5:4;
+    return (
+      <svg width={sz} height={sz} viewBox="0 0 60 60">
+        <rect x={x0} y={y0} width={w} height={h} rx="2" fill="none" stroke={p} strokeWidth="2" />
+        {Array.from({length:bars},(_,i)=>{
+          const bx = x0+4+((w-8)/(bars-1))*i;
+          return <line key={i} x1={bx} y1={y0} x2={bx} y2={y0+h} stroke={d} strokeWidth="1.5" />;
+        })}
+        <rect x="26" y={y0-6} width="8" height="8" rx="1" fill={d} />
+      </svg>
+    );
+  }
+  if (type.startsWith("door")) return (
+    <svg width={sz} height={sz} viewBox="0 0 60 60">
+      <path d="M14,52 L14,16 Q30,8 46,16 L46,52" fill="none" stroke={p} strokeWidth="2" />
+      <line x1="14" y1="52" x2="46" y2="52" stroke={p} strokeWidth="2" />
+      <ellipse cx="30" cy="32" rx="10" ry="14" fill="none" stroke={d} strokeWidth="1.5" />
+    </svg>
+  );
+  if (type === "snare") return (
+    <svg width={sz} height={sz} viewBox="0 0 60 60">
+      <circle cx="30" cy="24" r="17" fill="none" stroke={p} strokeWidth="2.5" />
+      <line x1="30" y1="41" x2="30" y2="55" stroke={p} strokeWidth="2" />
+    </svg>
+  );
+  return (
+    <svg width={sz} height={sz} viewBox="0 0 60 60">
+      <path d="M8,40 Q18,20 30,36 Q42,20 52,40" fill="none" stroke={p} strokeWidth="3" />
+      <circle cx="30" cy="36" r="5" fill={d} />
+      <line x1="4" y1="40" x2="56" y2="40" stroke={p} strokeWidth="2.5" />
+    </svg>
+  );
+}
+
+const ANIMALS = [
+  { name:"Raccoon", fpslug:"raccoon", fp:"raccoon", icon:"🦝", weight:"16-20 lbs", activity:"Nocturnal (peak 1-3 AM)", habitat:"Near water, woodlands, urban areas", diet:"Crayfish, insects, fruit, garbage, eggs", tracks:"5 elongated finger-like toes, hand-shaped. Hind print 3-4 inches wide.", recommended:"Large Cage Trap (32x10x12)", methods:["Large cage trap (32x10x12)","One-way door (large)","Snare with float trigger","Foothold #1.5-#2"], bait:"Fish, marshmallows, cat food, chicken, sweet corn", placement:"Near water, under decks, attic access", mating:"December - February", removal:"April - September", season:"Active year-round", lifespan:"2-3 years wild", soundDesc:"Chittering clicks, defense hissing", youngSize:"2 oz at birth", youngEyes:"3 weeks", youngMobile:"9 weeks", youngIndep:"12-14 weeks", youngFeatures:["Black mask visible from birth","Ringed tail visible at 2 weeks","Distinct crying call","Born April-May, litters of 2-5"], youngRisks:"Distemper and rabies possible. Wear gloves. Never separate from mother.", youngImg:"🦝" },
+  { name:"Squirrel (Gray)", fpslug:"squirrel", fp:{toes:4,claws:true,elongated:true}, icon:"🐿️", weight:"0.5-0.7 lbs", activity:"Diurnal (dawn and dusk peaks)", habitat:"Trees, yards, parks, woodlands", diet:"Nuts, seeds, fruit, bird eggs, fungi", tracks:"4 toes front, 5 toes rear. Paired hops. Nail scratches on tree bark.", recommended:"Medium Cage Trap (16x6x6)", methods:["Medium cage trap (16x6x6)","One-way door (medium)","Repeater trap at entry hole","Body grip #110"], bait:"Peanut butter, whole peanuts, sunflower seeds, corn", placement:"Attic entry holes, tree branches, roof lines", mating:"Dec-Feb and Jun-Jul", removal:"August - November", season:"Active year-round. Peak fall.", lifespan:"6-12 years wild", soundDesc:"Rapid chattering, structural scratching", youngSize:"0.5 oz at birth, born hairless and pink", youngEyes:"4-5 weeks", youngMobile:"7 weeks", youngIndep:"10-12 weeks", youngFeatures:["Pink hairless newborns","Gray fur appears at 3-4 weeks","Eyes open at 4-5 weeks","Litters of 2-4, born Feb and Jul"], youngRisks:"Generally low risk. May bite if cornered. Possible fleas and ticks.", youngImg:"🐿️" },
+  { name:"Skunk", fpslug:"skunk", fp:{toes:5,claws:true}, icon:"🦨", weight:"3-10 lbs", activity:"Nocturnal, active dusk to dawn", habitat:"Open areas, gardens, burrows, under structures", diet:"Insects, grubs, eggs, small mammals, berries", tracks:"5 toes with prominent claws. Waddling stride pattern.", recommended:"Medium Cage Trap covered with tarp!", methods:["Medium cage trap covered with tarp","One-way door with tarp cover","Exclusion with one-way funnel"], bait:"Cat food, eggs, grubs, fish, peanut butter", placement:"Near burrow entrances, under porches, deck edges", mating:"February - March", removal:"June - August", season:"Spring through fall. Less active in winter.", lifespan:"3 years wild", soundDesc:"Low growling hiss, stomp warning clicks", youngSize:"0.75 oz at birth, pink and hairless", youngEyes:"3 weeks", youngMobile:"6-7 weeks", youngIndep:"10-12 weeks", youngFeatures:["White stripe faintly visible at birth","Spray capability present from birth","Litters of 4-7, born May-June","Stomp-and-turn warning before spraying"], youngRisks:"Spray risk even in kits. Rabies possible. Always use covered trap approach.", youngImg:"🦨" },
+  { name:"Opossum", fpslug:"opossum", fp:"opossum", icon:"🐾", weight:"8-14 lbs", activity:"Nocturnal, occasionally diurnal", habitat:"Trees, dens, near human structures", diet:"Carrion, insects, fruit, eggs, garbage", tracks:"5 toes with opposable thumb on hind foot (no claw on thumb).", recommended:"Large Cage Trap (32x10x12)", methods:["Large cage trap (32x10x12)","One-way door (large)","Box trap","Ground snare"], bait:"Marshmallows, cat food, fish, overripe fruit", placement:"Attic entry points, under decks, shed entrances", mating:"January - June (2-3 litters/year)", removal:"August - October", season:"Most active spring and summer.", lifespan:"1-2 years wild", soundDesc:"Clicking hiss growls, total defense display", youngSize:"Rice grain size at birth", youngEyes:"2 months in pouch", youngMobile:"3-4 months on back", youngIndep:"4-5 months", youngFeatures:["Litters of 8-20, many die in pouch","Emerge from pouch at 70 days","Cling to mother's back at 3-4 months","Hiss when cornered or play dead"], youngRisks:"Low disease risk. Immune to most snake venoms. Handle with gloves.", youngImg:"🐾" },
+  { name:"Fox", fpslug:"fox", fp:{toes:4,claws:true}, icon:"🦊", weight:"8-15 lbs", activity:"Crepuscular (dawn and dusk)", habitat:"Fields, forests, edges, suburban areas", diet:"Rodents, rabbits, birds, insects, fruit", tracks:"Oval cat-like 4-toe print in a straight line. 2 to 2.5 inches.", recommended:"Extra Large Cage or Snare #2", methods:["Extra large cage trap","Foothold #2-#3 on trail","Snare on known run","Box trap with chicken bait"], bait:"Fresh poultry, eggs, fish, roadkill, fox urine lure", placement:"Trail intersections, burrow entrances, hedgerows", mating:"January - March", removal:"May - August", season:"Active year-round. Peak fall and winter.", lifespan:"3-4 years wild", soundDesc:"High pitched yip barks, night screams", youngSize:"3-4 oz at birth, dark brown fur", youngEyes:"10-14 days", youngMobile:"4-5 weeks", youngIndep:"7 months", youngFeatures:["Born February-April, litters of 4-6","Dark chocolate-brown at birth","Rusty red color emerges at 4 weeks","Stay with parents through summer"], youngRisks:"Rabies and mange possible. Do not approach den. Parents are very protective.", youngImg:"🦊" },
+  { name:"Groundhog", fpslug:"mole", fp:{toes:4,claws:true,wide:true}, icon:"🦡", weight:"4-14 lbs", activity:"Diurnal (most active midday)", habitat:"Fields, meadows, near burrows, garden edges", diet:"Grasses, vegetables, clover, bark, fruit", tracks:"4 toes front with large claws. 5 toes rear. Wide body.", recommended:"Large Cage Trap at burrow entrance", methods:["Large cage trap at burrow","One-way door over burrow hole","Snare at entrance","Exclusion fencing with L-footer"], bait:"Clover, lettuce, apples, carrots, cantaloupe", placement:"Directly at burrow entrances, garden fence lines", mating:"March - April (after hibernation)", removal:"August - September", season:"March - October. Winter hibernation.", lifespan:"3-6 years wild", soundDesc:"Loud whistle alarm, chittering, low barks", youngSize:"1 oz at birth, hairless and blind", youngEyes:"4 weeks", youngMobile:"5-6 weeks", youngIndep:"6-7 weeks", youngFeatures:["Litters of 2-6, born April-May","Leave burrow at 5-6 weeks old","Often seen near the burrow entrance","Whistle loudly when alarmed"], youngRisks:"Low disease risk. Bites if handled. Burrowing near structures can cause damage.", youngImg:"🦡" },
+  { name:"Norway Rat", fpslug:"squirrel", fp:{toes:4,claws:true}, icon:"🐀", weight:"0.5-1 lb", activity:"Nocturnal (active after dark)", habitat:"Basements, walls, sewers, outdoor burrows", diet:"Grains, seeds, garbage, pet food", tracks:"0.5 inch droppings, gnaw marks, grease rub marks on walls.", recommended:"Snap Trap (Rat) - Victor or T-Rex style", methods:["Snap trap along wall","Electronic trap","Live cage trap (small)","Multi-catch trap","Bait station (exterior)"], bait:"Peanut butter, nesting material, chocolate, grain", placement:"Along walls, behind appliances, inside burrows, runways", mating:"Year-round (peaks spring and fall)", removal:"Year-round (pest species)", season:"Active year-round. Peak indoors fall to winter.", lifespan:"1-2 years", soundDesc:"Squeaking, gnawing clicks, scurrying", youngSize:"0.2 oz at birth, pink and hairless", youngEyes:"2 weeks", youngMobile:"3 weeks", youngIndep:"4-5 weeks", youngFeatures:["Litters of 6-12, up to 7 litters per year","Can reproduce at 5 weeks old","Dark fur appears at 1 week","Pups stay in nest for first 3 weeks"], youngRisks:"Hantavirus, leptospirosis, salmonella. Always use PPE. Never touch bare-handed.", youngImg:"🐀" },
+  { name:"House Mouse", fpslug:"squirrel", fp:{toes:4}, icon:"🐭", weight:"0.6-1 oz", activity:"Nocturnal, active year-round", habitat:"Inside walls, cabinets, attics, stored items", diet:"Seeds, grains, pantry items, cereal, chocolate", tracks:"Tiny 4-toe prints. Droppings 0.25 inch in a line.", recommended:"Snap Trap (Mouse) - Victor or Tomcat style", methods:["Snap trap along walls","Electronic mouse trap","Multi-catch live trap","Exclusion sealing gaps over 1/4 inch"], bait:"Peanut butter, hazelnut spread, cotton nesting, chocolate", placement:"Behind appliances, along walls, inside cabinets", mating:"Year-round (peaks fall and winter)", removal:"Year-round (pest species)", season:"Peak infestation fall through spring.", lifespan:"1-2 years", soundDesc:"Tiny high-pitched squeaks, wall scratching", youngSize:"Pea-sized at birth, 1-2 grams", youngEyes:"2 weeks", youngMobile:"2-3 weeks", youngIndep:"3 weeks", youngFeatures:["Litters of 4-8, can have 10 litters per year","Pink hairless eyes-closed at birth","Fur appears at 10 days","Fully independent at 3 weeks"], youngRisks:"Hantavirus possible. Use gloves and mask. Seal all entry points.", youngImg:"🐭" },
+  { name:"Little Brown Bat", fpslug:"bat", fp:"bat", icon:"🦇", weight:"0.2-0.35 oz", activity:"Nocturnal, hibernates in winter", habitat:"Attics, soffits, behind siding, caves", diet:"Insects including mosquitoes, moths, beetles", tracks:"Guano pellets below roost. Grease and urine stains at entry gaps.", recommended:"Bat Cone or Netting One-Way Exclusion", methods:["Bat cone over primary entry","Netting one-way (hang loose, allow exit only)","Caulk all secondary gaps first","Leave device 5-7 days before sealing","NEVER trap or kill bats - protected in most states"], bait:"No bait - exclusion only. Install bat house nearby.", placement:"Primary entry at roofline, soffit gaps, ridge cap, shutters", mating:"August - October (delayed implantation)", removal:"Aug 1 - Apr 14 AVOID June/July maternity!", season:"Install Aug-Oct or Mar-Apr. NEVER during June-July.", lifespan:"6-7 years wild", soundDesc:"Ultrasonic echolocation, dark chattering", youngSize:"One pup per mother, born June-July", youngEyes:"1 week", youngMobile:"3 weeks (can fly)", youngIndep:"4-6 weeks", youngFeatures:["Born June-July in maternity colonies","Single pup clings to the mother","Can fly independently at 3 weeks","Colonies of hundreds in attics - seasonal exclusion ONLY"], youngRisks:"Rabies possible. NEVER handle bare-handed. Legal protection applies.", youngImg:"🦇" },
+  { name:"Big Brown Bat", fpslug:"bat", fp:"bat", icon:"🦇", weight:"0.4-0.8 oz", activity:"Nocturnal, hibernates in winter", habitat:"Buildings, attics, wall voids, caves", diet:"Large insects - beetles, crickets, wasps", tracks:"Larger guano deposits. Louder chattering than little brown.", recommended:"Bat Cone or Netting One-Way Exclusion", methods:["Bat cone over each exit point","Netting one-way below gap","Seal ALL secondary entry points first","Leave exclusion 5-7 days minimum","NEVER trap or kill bats - federally protected"], bait:"No bait - exclusion only. Bat houses encourage relocation.", placement:"All active entry points found at dusk observation", mating:"September - December (fall swarming)", removal:"Aug 15 - Apr 14 AVOID June/July maternity!", season:"Install Aug 15-Oct or Mar 1-Apr 14. Never June-July.", lifespan:"4-19 years wild", soundDesc:"Low frequency echolocation, audible clicks", youngSize:"One or two pups, born June-July", youngEyes:"1 week", youngMobile:"3-4 weeks (can fly)", youngIndep:"5-6 weeks", youngFeatures:["Larger than little brown bat","Born with eyes closed, clings to mother","More solitary - smaller colonies","Hibernate overwinter in buildings"], youngRisks:"Rabies possible. NEVER handle. Federally protected species.", youngImg:"🦇" },
+  { name:"Mole", fpslug:"mole", fp:"mole", icon:"🦡", weight:"2-3.5 oz", activity:"Active day and night year-round", habitat:"Underground tunnel systems, lawns, gardens", diet:"Earthworms, grubs, beetle larvae", tracks:"Star-shaped broad front paw. Raised tunnel ridges and volcano molehills.", recommended:"Scissor or Harpoon Trap in active tunnel", methods:["Scissor jaw trap in main tunnel","Harpoon spike trap","Pincher trap in runway","Live trap in main run"], bait:"No bait needed - set in active tunnel. Gummy worms can help.", placement:"Locate active runs, step down and check next day, set at intersection", mating:"February - April", removal:"Year-round (yard damage)", season:"Most active spring and fall during wet periods.", lifespan:"3-6 years", soundDesc:"Subterranean scraping, rarely heard", youngSize:"2 grams at birth, hairless", youngEyes:"3-4 weeks", youngMobile:"4-5 weeks", youngIndep:"5-6 weeks", youngFeatures:["1-5 pups per litter, born March-April","Leave natal burrow at 5-6 weeks","Star-shaped nose visible at birth","Only 1 litter per year"], youngRisks:"Low disease risk. Bites hard if handled. Velvety fur is distinctive.", youngImg:"🦡" },
+  { name:"Vole", fpslug:"squirrel", fp:{toes:4}, icon:"🐭", weight:"0.7-1.5 oz", activity:"Active day and night", habitat:"Grass, gardens, meadows, surface runways", diet:"Plants, roots, grass seeds, bulbs, bark", tracks:"Visible surface runways in grass. 4 small toes. Bark gnawing at ground level.", recommended:"Snap Trap (Mouse) set in runway", methods:["Snap trap in surface runway","Live cage trap (small)","Poison bait in tunnel (exterior)","Hardware cloth tree guards"], bait:"Peanut butter, oatmeal, apple slices, sunflower seeds", placement:"Inside active grass runways, tunnel entrances, garden edges", mating:"March - October", removal:"Year-round", season:"Most damaging spring through fall.", lifespan:"1-2 years", soundDesc:"Squeaking in runways, high chirps", youngSize:"2 grams at birth, very small", youngEyes:"2 weeks", youngMobile:"2-3 weeks", youngIndep:"3 weeks", youngFeatures:["Litters of 3-6, up to 12 litters per year","Extremely rapid reproduction","Visible grass runways are key colony sign","Shorter tail and stockier body than mice"], youngRisks:"Low risk. Hantavirus theoretically possible. Use gloves.", youngImg:"🐭" },
+  { name:"Chipmunk", fpslug:"squirrel", fp:{toes:4,elongated:true}, icon:"🐿️", weight:"0.2-0.3 lbs", activity:"Diurnal (daytime only), hibernates winter", habitat:"Burrows at ground level, woodpiles, stone walls", diet:"Seeds, nuts, insects, berries, bulbs", tracks:"Tiny ground-level prints. Burrow openings 1.5 to 2 inches wide.", recommended:"Small Cage Trap at burrow entrance", methods:["Small cage trap at burrow (8x8)","Snap trap under cover board","One-way funnel at burrow","Exclusion with hardware cloth"], bait:"Sunflower seeds, peanut butter, whole peanuts, dried corn", placement:"Burrow entrances, woodpile edges, stone wall gaps", mating:"March-April and July-August", removal:"September - February", season:"March - October active. Winter hibernation.", lifespan:"3-6 years", soundDesc:"Chip alarm calls, sharp chattering", youngSize:"0.1 oz at birth, hairless", youngEyes:"4-5 weeks", youngMobile:"6 weeks", youngIndep:"7-8 weeks", youngFeatures:["2 litters per year, 2-8 pups each","Born April-May and July-August","Stripes visible at 3 weeks","Emerge from burrow at 6 weeks"], youngRisks:"Low risk. May bite if cornered. Foundation-level burrowing near structures.", youngImg:"JM" },
+  { name:"Porcupine", fpslug:"mole", fp:{toes:4,claws:true,wide:true}, icon:"🦔", weight:"12-35 lbs", activity:"Nocturnal, year-round", habitat:"Wooded areas, trees, dens under structures", diet:"Tree bark, twigs, leaves, cambium layer", tracks:"Large pigeon-toed 4-toe prints with quill drag marks between feet.", recommended:"Extra Large Cage Trap (24x8x8)", methods:["Extra large cage trap (24x8x8)","One-way door at den entrance","Exclusion fencing with buried apron"], bait:"Vegetables, bark, salt blocks, apples, peanut butter", placement:"Tree damage areas, den entrances, near gnawed structures", mating:"September - November", removal:"May - August", season:"Active year-round. Most visible in winter.", lifespan:"5-7 years", soundDesc:"Structural grunting, tooth chatter snaps", youngSize:"1 lb at birth - born large!", youngEyes:"Born with eyes open", youngMobile:"Born walking within hours", youngIndep:"6 months", youngFeatures:["Single pup (porcupette) born May-June","Quills present at birth but harden within hours","Can emit warning odor","Follows mother for 6 months"], youngRisks:"Quills detach easily on contact. Wear thick gloves. Do not touch bare-handed.", youngImg:"🦔" },
+  { name:"Beaver", fpslug:"beaver", fp:"beaver", icon:"🦫", weight:"30-60 lbs", activity:"Nocturnal, year-round", habitat:"Streams, ponds, water edges, dam sites", diet:"Tree bark, aquatic plants, woody stems", tracks:"Webbed 5-toe rear prints over 4 inches. Tail drag mark in mud.", recommended:"Extra Large Live Trap + Check Regulations", methods:["Extra large live trap (36x10x10)","Snare with float trigger","Dam breach combined with trap","Flow pipe device to stop flooding","Check state regulations - permit often required"], bait:"Aspen bark, willow branches, poplar, castor lure", placement:"Dam entry and exit points, water edge runs, lodge entrances", mating:"January - March", removal:"May - August (check local regulations)", season:"Active year-round. Most active fall and spring.", lifespan:"5-10 years", soundDesc:"Water tail slaps, territorial grunts", youngSize:"1 lb at birth, fully furred", youngEyes:"Born with eyes open", youngMobile:"Born swimming-capable", youngIndep:"2 years", youngFeatures:["Litters of 1-6 kits, born April-June","Born fully furred and eyes open","Swim within 24 hours of birth","Stay with family colony for 2 years"], youngRisks:"Rabies and tularemia possible. Strong jaws - wear gloves. Permit may be required.", youngImg:"🦫" },
+  { name:"Shrew", fpslug:"squirrel", fp:{toes:5}, icon:"🐭", weight:"0.1-0.3 oz", activity:"Active day and night (every 2-3 hrs)", habitat:"Leaf litter, dense ground cover, tunnels", diet:"Insects, worms, spiders, small mice, carrion", tracks:"Tiny 5-toe prints. Tunnels in leaf litter. Miniscule droppings.", recommended:"Small Snap Trap under cover board", methods:["Small snap trap under cover board","Pitfall trap (bucket in ground)","Live trap (tiny)","Remove leaf cover and debris"], bait:"Insects, earthworms, peanut butter, wet cat food", placement:"Burrow entrances, ground level under debris", mating:"April - August", removal:"Year-round (minor nuisance)", season:"Active year-round, peak spring and summer.", lifespan:"1-2.5 years", soundDesc:"High-pitched squeaking trills, clicks", youngSize:"0.05 oz at birth - smaller than a dime!", youngEyes:"3 weeks", youngMobile:"3 weeks", youngIndep:"4 weeks", youngFeatures:["Litters of 2-10, up to 3 litters per year","Must eat every 2-3 hours or dies","Velvety gray fur even as young","Easily confused with mice - longer pointed snout"], youngRisks:"Low risk. Some shrews have venomous saliva. Always use gloves.", youngImg:"🐭" },
+];
+
+function TrapTrack() {
+  const remindLog = React.useRef({});
+  const today = new Date().toISOString().split("T")[0];
+  const addDays = (n) => new Date(Date.now()+n*86400000).toISOString().split("T")[0];
+  const IS = {
+    width:"100%", padding:"9px 10px", backgroundColor:T.deep, border:"1px solid "+T.border,
+    borderRadius:"6px", color:T.text, fontSize:"12px", fontFamily:"'Courier New',monospace",
+    boxSizing:"border-box", display:"block",
+  };
+
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loginLicense, setLoginLicense] = useState("");
+  const [loginPin, setLoginPin] = useState("");
+
+  const [activeTab, setActiveTab] = useState("dashboard");
+  const [traps, setTraps] = useState([
+    { id:1, name:"Trap Alpha", type:"snare", location:"North Field", address:"45 Oak Ave, Springfield", trapLocation:"Behind NE garden shed", customerName:"John Smith", customerPhone:"555-234-5678", customerEmail:"john@email.com", customerAddress:"45 Oak Ave, Springfield", propertyType:"primary", deployLocation:"deployed", lat:40.7128, lng:-74.0060, status:"active", lastChecked:"2025-05-12", nextCheck:"2026-05-20", dateAdded:"2025-05-12" },
+    { id:2, name:"Trap Beta", type:"cage-large", location:"South Creek", address:"12 River Rd, Maplewood", trapLocation:"Under rear deck, left corner", customerName:"Sarah Jones", customerPhone:"555-987-6543", customerEmail:"sarah@email.com", customerAddress:"12 River Rd, Maplewood", propertyType:"rental", deployLocation:"deployed", lat:40.7159, lng:-74.0074, status:"triggered", lastChecked:"2025-05-10", nextCheck:"2026-05-17", dateAdded:"2025-05-10" },
+    { id:3, name:"Trap Gamma", type:"foothold", location:"West Ridge", address:"88 Birch Ln, Oakdale", trapLocation:"Trail intersection near pond", customerName:"Mike Davis", customerPhone:"555-321-0987", customerEmail:"mike@email.com", customerAddress:"88 Birch Ln, Oakdale", propertyType:"commercial", deployLocation:"deployed", lat:40.7180, lng:-74.0090, status:"checked", lastChecked:"2025-05-13", nextCheck:"2026-05-22", dateAdded:"2025-05-13" },
+  ]);
+  const [inspections, setInspections] = useState([
+    { id:1, date:"2025-05-14", followUpDate:"2026-05-18", location:"Front Exterior", client:"Bob Wilson - 123 Main St", notes:"Gaps in foundation and soffit. Signs of recent activity near NE corner.", entryPoints:["Foundation crack (2 inch)","Soffit gap north side"], severity:"high", aiAnalysis:null },
+  ]);
+
+  const [showTrapModal, setShowTrapModal] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const blankTrap = { name:"", type:"cage-large", location:"", address:"", trapLocation:"", customerName:"", customerPhone:"", customerEmail:"", customerAddress:"", propertyType:"primary", deployLocation:"truck", status:"active", dateAdded:today, nextCheck:addDays(3) };
+  const [trapForm, setTrapForm] = useState(blankTrap);
+
+  const [showInspModal, setShowInspModal] = useState(false);
+  const blankInsp = { location:"", client:"", notes:"", entryPoints:"", severity:"medium", followUpDate:addDays(7) };
+  const [inspForm, setInspForm] = useState(blankInsp);
+  const [editInspId, setEditInspId] = useState(null);
+  const [editInspData, setEditInspData] = useState(null);
+  const [notesId, setNotesId] = useState(null);
+  const [notesText, setNotesText] = useState("");
+  const [entryId, setEntryId] = useState(null);
+  const [entryText, setEntryText] = useState("");
+  const [expandedInsp, setExpandedInsp] = useState(null);
+
+  const [statusPopupId, setStatusPopupId] = useState(null);
+  const [expandedAnimal, setExpandedAnimal] = useState(null);
+  const [calMonth, setCalMonth] = useState(new Date());
+  const [selDate, setSelDate] = useState(null);
+  const [selCard, setSelCard] = useState(null);
+  const [selFeature, setSelFeature] = useState(null);
+  const [invFilter, setInvFilter] = useState(null);
+  const [fupPopup, setFupPopup] = useState(null);
+  const [fupForm, setFupForm] = useState({ status:"checked", notes:"", nextCheck:addDays(7) });
+  const openFupPopup = (data) => {
+    setFupPopup(data);
+    setFupForm({ status:"checked", notes:"", nextCheck:addDays(7) });
+  };
+  const [custModal, setCustModal] = useState(null);
+  const [custEdit, setCustEdit] = useState(null);
+  const [fpModal, setFpModal] = useState(null);
+  const [youngModal, setYoungModal] = useState(null);
+  const [infoPopup, setInfoPopup] = useState(null);
+  const [fpCache, setFpCache] = useState({});
+  const [zoomModal, setZoomModal] = useState(null);
+  const [prefs, setPrefs] = useState({ emailApp:"gmail", reminderDays:3, resendKey:"", resendFrom:"", anthropicKey:"", gmapsKey:"", reminderTemplate:"Hi {name}, this is your follow-up reminder from Guardian Systems. Your trap ({trap}) at {location} is due for service. We will contact you shortly. Thank you!" });
+  const [emailMode, setEmailMode] = useState("generic");
+  const [aiComposing, setAiComposing] = useState(false);
+  const [aiTracking, setAiTracking] = useState(null);
+  const [aiQuery, setAiQuery] = useState("");
+  const [aiQueryResult, setAiQueryResult] = useState(null);
+  const [aiQueryLoading, setAiQueryLoading] = useState(false);
+  const [autoSendStatus, setAutoSendStatus] = useState(null);
+  const [reminderQueue, setReminderQueue] = useState([]);
+  const [sendConfirmPopup, setSendConfirmPopup] = useState(null);
+  const leafletRef = React.useRef(null);
+  const leafletMap = React.useRef(null);
+  const userMarker = React.useRef(null);
+  const [catches, setCatches] = useState([]);
+  const [techReports, setTechReports] = useState([]);
+  const [showTechModal, setShowTechModal] = useState(false);
+  const blankTech = { accountNum:"", locationNum:"", customerName:"", customerAddress:"", customerPhone:"", animal:"", quantity:1, notes:"", date:"" };
+  const [techForm, setTechForm] = useState({...blankTech});
+  const [techEditId, setTechEditId] = useState(null);
+
+  const fetchFootprint = async (animalName) => {
+    if (fpCache[animalName] && fpCache[animalName].status !== "error") return;
+    setFpCache((c) => ({ ...c, [animalName]: { status: "loading" } }));
+    try {
+      const prompt = `Search the web for a clear real photograph of ${animalName} animal footprints or tracks for wildlife identification. Find the best publicly accessible image URL showing actual ${animalName} tracks in mud, snow, or dirt. Return ONLY a JSON object no markdown: {"imageUrl":"direct url","source":"site name","altText":"description","idTips":"2-3 key ID tips covering size toe count shape and distinctive features"}`;
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          tools: [{ type: "web_search_20250305", name: "web_search" }],
+          messages: [{ role: "user", content: prompt }],
+        }),
+      });
+      const data = await res.json();
+      const text = (data.content||[]).filter((b)=>b.type==="text").map((b)=>b.text).join("");
+      const clean = text.replace(/```json|```/g,"").trim();
+      const s = clean.indexOf("{"), e = clean.lastIndexOf("}");
+      if (s===-1||e===-1) throw new Error("No result found");
+      const parsed = JSON.parse(clean.slice(s,e+1));
+      setFpCache((c) => ({ ...c, [animalName]: { status: "ok", ...parsed } }));
+    } catch (err) {
+      setFpCache((c) => ({ ...c, [animalName]: { status: "error", error: err.message } }));
+    }
+  };
+
+  // Initialize map when map tab becomes active
+  React.useEffect(() => {
+    if (activeTab !== "map") return;
+    const el = document.getElementById("traptrack-map");
+    if (!el) return;
+
+    const SA_LAT = 29.4241, SA_LNG = -98.4936;
+    const mapped = traps.filter(t => t.lat && t.lng);
+
+    // ── Try Google Maps if API key configured ──────────────────────────────
+    if (prefs.gmapsKey && !leafletMap.current) {
+      const initGoogleMap = () => {
+        if (!window.google || !window.google.maps) return;
+        const gmap = new window.google.maps.Map(el, {
+          center: { lat: SA_LAT, lng: SA_LNG },
+          zoom: 11,
+          mapTypeId: "roadmap",
+          styles: [{ featureType:"all", stylers:[{ saturation:-20 }] }]
+        });
+        leafletMap.current = gmap;
+        mapped.forEach(t => {
+          const color = t.status==="triggered"?"#ff3333":t.status==="active"?"#00ff88":"#00cfff";
+          const marker = new window.google.maps.Marker({
+            position: { lat: t.lat, lng: t.lng },
+            map: gmap,
+            title: t.name,
+            icon: { path: window.google.maps.SymbolPath.CIRCLE, scale:8, fillColor:color, fillOpacity:1, strokeColor:"#030a06", strokeWeight:2 }
+          });
+          const info = new window.google.maps.InfoWindow({
+            content: "<div style='font-size:12px'><b>" + t.name + "</b><br>" + (t.customerName||"") + "<br>" + (t.address||t.location||"") + "<br><span style='color:"+color+"'>● " + t.status.toUpperCase() + "</span></div>"
+          });
+          marker.addListener("click", () => info.open(gmap, marker));
+        });
+        if (mapped.length > 0) {
+          const bounds = new window.google.maps.LatLngBounds();
+          mapped.forEach(t => bounds.extend({ lat:t.lat, lng:t.lng }));
+          gmap.fitBounds(bounds);
+        }
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(pos => {
+            const ll = { lat:pos.coords.latitude, lng:pos.coords.longitude };
+            new window.google.maps.Marker({ position:ll, map:gmap, title:"You", icon:{ path:window.google.maps.SymbolPath.CIRCLE, scale:10, fillColor:"#ffaa00", fillOpacity:1, strokeColor:"#fff", strokeWeight:3 } });
+            if (mapped.length === 0) gmap.setCenter(ll);
+          }, ()=>{});
+        }
+      };
+      if (window.google && window.google.maps) {
+        initGoogleMap();
+      } else if (!document.getElementById("gmaps-script")) {
+        const script = document.createElement("script");
+        script.id = "gmaps-script";
+        script.src = "https://maps.googleapis.com/maps/api/js?key=" + prefs.gmapsKey;
+        script.onload = initGoogleMap;
+        document.head.appendChild(script);
+      }
+      return;
+    }
+
+    // ── Leaflet / OpenStreetMap fallback ──────────────────────────────────
+    if (!window.L) return;
+    if (leafletMap.current) { try { leafletMap.current.invalidateSize(); } catch(e) {} return; }
+
+    const lmap = window.L.map(el, { zoomControl:true, attributionControl:false }).setView([SA_LAT, SA_LNG], 11);
+    leafletMap.current = lmap;
+    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:19 }).addTo(lmap);
+
+    const mkIcon = (color, size) => window.L.divIcon({ html:"<div style='background:"+color+";width:"+size+"px;height:"+size+"px;border-radius:50%;border:2px solid #030a06;box-shadow:0 0 6px "+color+"88'></div>", className:"", iconSize:[size,size], iconAnchor:[size/2,size/2] });
+
+    mapped.forEach(t => {
+      const color = t.status==="triggered"?"#ff3333":t.status==="active"?"#00ff88":"#00cfff";
+      const gmUrl = "https://www.google.com/maps?q="+t.lat+","+t.lng;
+      window.L.marker([t.lat,t.lng], { icon:mkIcon(color, t.status==="triggered"?16:14) })
+        .addTo(lmap)
+        .bindPopup("<div style='font-family:monospace;font-size:11px;min-width:150px;line-height:16px'><b style='color:"+color+"'>"+t.name+"</b><br>"+(t.customerName?"👤 "+t.customerName+"<br>":"")+(t.address?"🏠 "+t.address+"<br>":"")+"<span style='color:"+color+"'>● "+t.status.toUpperCase()+"</span><br><a href='"+gmUrl+"' target='_blank' style='color:#00cfff'>→ Google Maps</a></div>", { maxWidth:220 });
+    });
+
+    if (mapped.length > 0) {
+      lmap.fitBounds(mapped.map(t=>[t.lat,t.lng]), { padding:[40,40], maxZoom:13 });
+    }
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(pos => {
+        const ll = [pos.coords.latitude, pos.coords.longitude];
+        if (userMarker.current) lmap.removeLayer(userMarker.current);
+        userMarker.current = window.L.marker(ll, { icon:mkIcon("#ffaa00", 16) }).addTo(lmap).bindPopup("<b style='color:#ffaa00'>📍 You are here</b>");
+        if (mapped.length === 0) lmap.setView(ll, 12);
+        else {
+          // Include user in bounds
+          const pts = [...mapped.map(t=>[t.lat,t.lng]), ll];
+          lmap.fitBounds(pts, { padding:[40,40], maxZoom:13 });
+        }
+      }, ()=>{});
+    }
+  }, [activeTab]);
+
+  // Multi-layer persistence: window.storage (Claude) → localStorage → cookie
+  const saveData = async (key, val) => {
+    const str = JSON.stringify(val);
+    try { if (window.storage) await window.storage.set(key, str); } catch(e) {}
+    try { localStorage.setItem(key, str); } catch(e) {}
+    try { document.cookie = key+"="+encodeURIComponent(str)+";max-age=31536000;path=/"; } catch(e) {}
+  };
+  const loadData = async (key) => {
+    try { if (window.storage) { const r = await window.storage.get(key); if (r&&r.value) return JSON.parse(r.value); } } catch(e) {}
+    try { const v = localStorage.getItem(key); if (v) return JSON.parse(v); } catch(e) {}
+    try { const m = document.cookie.match(new RegExp(key+"=([^;]+)")); if (m) return JSON.parse(decodeURIComponent(m[1])); } catch(e) {}
+    return null;
+  };
+
+  React.useEffect(() => {
+    const load = async () => {
+      const p = await loadData('tt:prefs');
+      if (p) setPrefs(prev => ({...prev, ...p}));
+      const t = await loadData('tt:traps');
+      if (t) setTraps(t);
+      const i = await loadData('tt:inspections');
+      if (i) setInspections(i);
+    };
+    load();
+  }, []);
+
+  React.useEffect(() => { saveData('tt:prefs', prefs); }, [prefs]);
+  React.useEffect(() => { saveData('tt:traps', traps); }, [traps]);
+  React.useEffect(() => { saveData('tt:inspections', inspections); }, [inspections]);
+
+  React.useEffect(() => {
+
+    const check = () => {
+      const days = prefs.reminderDays || 3;
+      const due = traps.filter(t => {
+        if (t.deployLocation !== "deployed" || !t.customerEmail) return false;
+        const last = t.lastChecked || t.dateAdded;
+        if (!last) return false;
+        const d = Math.floor((new Date(today) - new Date(last)) / 86400000);
+        if (d < days) return false;
+        const lr = remindLog.current[t.id];
+        return !lr || Math.floor((new Date(today) - new Date(lr)) / 86400000) >= days;
+      });
+      if (due.length > 0) {
+        if (prefs.resendKey) { sendAutoReminders(due); }
+        else { setReminderQueue(due); }
+      }
+    };
+    const t = setTimeout(check, 2000);
+    return () => clearTimeout(t);
+  }, []);
+
+  const handleLoginSubmit = (e) => {
+    e.preventDefault();
+    const validAccounts = [
+      { license: "784132", pin: "1488" },
+      { license: "Test",   pin: "0000" },
+    ];
+    if (validAccounts.some(a => a.license.toLowerCase() === loginLicense.trim().toLowerCase() && a.pin === loginPin.trim())) {
+      setIsAuthenticated(true);
+    } else {
+      alert("Terminal Unauthorized. Please check your credentials.");
+    }
+  };
+
+  const anthropicHeaders = () => ({ "Content-Type":"application/json", "x-api-key":prefs.anthropicKey||"", "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true" });
+
+  const generateAIEmail = async (trap, notes) => {
+    const p = "Write a brief professional follow-up email under 120 words for Guardian Systems LLC, wildlife trapping, San Antonio TX. Customer: "+(trap.customerName||"Customer")+". Address: "+(trap.address||trap.location)+". Trap: "+(TRAP_LBL[trap.type]||trap.type)+(trap.caughtAnimal?". Animal removed: "+trap.caughtAnimal:"")+(trap.nextCheck?". Next visit: "+trap.nextCheck:"")+(notes?". Notes: "+notes:"")+". Sign: Guardian Systems LLC. Return only the email body.";
+    const r = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:anthropicHeaders(),body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:300,messages:[{role:"user",content:p}]})});
+    const d = await r.json();
+    return d.content&&d.content[0]&&d.content[0].text;
+  };
+
+  const generateCustomerReport = async () => {
+    if (!prefs.anthropicKey) { setAiTracking({status:"error",report:"Add your Anthropic API key in Settings.",updatedAt:null}); return; }
+    setAiTracking({status:"loading",report:null,updatedAt:null});
+    const cs = traps.map(t=>t.customerName+"|"+t.status+"|"+(t.address||t.location)+"|last:"+(t.lastChecked||"?")+"|next:"+(t.nextCheck||"?")+(t.caughtAnimal?"|caught:"+t.caughtAnimal:"")).join("\n");
+    const p = "You are an AI assistant for Guardian Systems LLC (wildlife trapping, San Antonio TX). Analyze this data and give a brief operational report.\n\nCUSTOMERS:\n"+cs+"\n\nProvide: 1) URGENT items 2) Status overview 3) Catch patterns 4) Upcoming follow-ups 5) Recommendations. Use customer names, keep it concise.";
+    try {
+      const r = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:anthropicHeaders(),body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:800,messages:[{role:"user",content:p}]})});
+      const d = await r.json();
+      setAiTracking({status:"ok",report:(d.content&&d.content[0]&&d.content[0].text)||"No report.",updatedAt:new Date().toLocaleTimeString()});
+    } catch(e) { setAiTracking({status:"error",report:"Error: "+e.message,updatedAt:null}); }
+  };
+
+  const askAIQuery = async () => {
+    if (!aiQuery.trim()) return;
+    if (!prefs.anthropicKey) { setAiQueryResult("Add your Anthropic API key in Settings."); return; }
+    setAiQueryLoading(true);
+    const ctx = "Traps: "+JSON.stringify(traps.map(t=>({name:t.name,customer:t.customerName,status:t.status,address:t.address,next:t.nextCheck,animal:t.caughtAnimal})));
+    try {
+      const r = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:anthropicHeaders(),body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:300,messages:[{role:"user",content:"Guardian Systems assistant. Answer briefly. DATA: "+ctx+" QUESTION: "+aiQuery.trim()}]})});
+      const d = await r.json();
+      setAiQueryResult((d.content&&d.content[0]&&d.content[0].text)||"No answer.");
+    } catch(e) { setAiQueryResult("Error: "+e.message); }
+    setAiQueryLoading(false);
+  };
+
+  const sendAutoReminders = async (dueTraps) => {
+    const rk = prefs.resendKey; const rf = prefs.resendFrom||"onboarding@resend.dev";
+    const tmpl = prefs.reminderTemplate||"Hi {name}, follow-up reminder from Guardian Systems. Your trap ({trap}) at {location} is due for service. Thank you!";
+    if (!rk) { setAutoSendStatus({sent:[],failed:["Add Resend API key in Settings"]}); return; }
+    const results = {sent:[],failed:[]};
+    if (emailMode==="ai") setAiComposing(true);
+    for (const trap of dueTraps) {
+      if (!trap.customerEmail) { results.failed.push((trap.customerName||trap.name)+" (no email)"); continue; }
+      let msg = null;
+      if (emailMode==="ai") { const notes = inspections.filter(i=>i.linkedTrapId===trap.id).map(i=>i.notes).join(" "); msg = await generateAIEmail(trap, notes).catch(()=>null); }
+      if (!msg) msg = tmpl.replace("{name}",trap.customerName||"Customer").replace("{trap}",trap.name).replace("{location}",trap.address||trap.location||"your property");
+      try {
+        const r = await fetch("https://api.resend.com/emails",{method:"POST",mode:"cors",headers:{"Authorization":"Bearer "+rk,"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({from:rf,to:[trap.customerEmail],subject:"Guardian Systems - Follow-Up Reminder",text:msg+"\n\nGuardian Systems LLC\nSan Antonio, TX"})});
+        if (r.ok||r.status===201) { results.sent.push(trap.customerName||trap.name); remindLog.current[trap.id]=today; }
+        else { const e=await r.json().catch(()=>{}); results.failed.push((trap.customerName||trap.name)+" ("+(e&&e.message||r.status)+")"); }
+      } catch(e) { const m=e.message.toLowerCase().includes("fetch")?"Use downloaded app for email":e.message; results.failed.push((trap.customerName||trap.name)+" ("+m+")"); }
+    }
+    if (emailMode==="ai") setAiComposing(false);
+    setAutoSendStatus(results);
+  };
+
+  const sendConfirmEmail = async (useAI) => {
+    if (!sendConfirmPopup) return;
+    const rk = prefs.resendKey;
+    const rf = prefs.resendFrom || "onboarding@resend.dev";
+    if (!rk) { setAutoSendStatus({sent:[], failed:["Add Resend API key in Settings to send directly"]}); setSendConfirmPopup(null); return; }
+    const trap = traps.find(t => t.customerEmail === sendConfirmPopup.email);
+    let msg;
+    if (useAI && prefs.anthropicKey && trap) {
+      const notes = inspections.filter(i => i.linkedTrapId===trap.id || (i.client&&i.client.includes(trap.customerName||""))).map(i=>i.notes).join(" ");
+      msg = await generateAIEmail(trap, notes).catch(()=>null);
+    }
+    if (!msg) {
+      msg = "Hi "+(sendConfirmPopup.customerName||"there")+",\n\nYour Guardian Systems follow-up appointment is confirmed for "+sendConfirmPopup.date+".\n\nWe will be in touch to confirm your service visit. Thank you for choosing Guardian Systems!\n\nGuardian Systems LLC\nSan Antonio, TX";
+    }
+    try {
+      const res = await fetch("https://api.resend.com/emails", {
+        method:"POST",
+        mode:"cors",
+        headers:{"Authorization":"Bearer "+rk,"Content-Type":"application/json","Accept":"application/json"},
+        body:JSON.stringify({from:rf, to:[sendConfirmPopup.email], subject:"Guardian Systems - Appointment Confirmation "+sendConfirmPopup.date, text:msg})
+      });
+      if (res.ok||res.status===201) {
+        setAutoSendStatus({sent:[sendConfirmPopup.customerName||sendConfirmPopup.email], failed:[]});
+      } else {
+        const errData = await res.json().catch(()=>({message:"HTTP "+res.status}));
+        setAutoSendStatus({sent:[], failed:["Email failed: "+(errData.message||res.status)+". Check Resend key in Settings."]});
+      }
+    } catch(e) {
+      const isSandbox = e.message.toLowerCase().includes("fetch") || e.message.toLowerCase().includes("network");
+      const msg = isSandbox
+        ? "Email sending requires the downloaded app. Text message still works."
+        : "Send failed: "+e.message;
+      setAutoSendStatus({sent:[], failed:[msg]});
+    }
+    setSendConfirmPopup(null);
+  };
+
+  const daysUntil = (d) => {
+    const diff = Math.ceil((new Date(d) - new Date(today)) / 86400000);
+    return diff === 0 ? "TODAY" : diff < 0 ? Math.abs(diff)+"d OVERDUE" : "in "+diff+"d";
+  };
+  const urgC = (d) => {
+    const diff = Math.ceil((new Date(d) - new Date(today)) / 86400000);
+    return diff <= 0 ? T.red : diff <= 3 ? T.amber : T.primary;
+  };
+
+  const saveTrap = () => {
+    if (!trapForm.name.trim() || !trapForm.location.trim()) { alert("Name and location required"); return; }
+    const d = trapForm.dateAdded || today;
+    const nc = trapForm.nextCheck || addDays(3);
+    const customerFields = { customerName:trapForm.customerName, customerPhone:trapForm.customerPhone, customerEmail:trapForm.customerEmail, customerAddress:trapForm.customerAddress };
+    const syncPhone = trapForm.customerPhone ? trapForm.customerPhone.trim() : null;
+    const syncCustomer = (list, skipId) => syncPhone
+      ? list.map((t) => (t.id !== skipId && t.customerPhone && t.customerPhone.trim() === syncPhone) ? { ...t, ...customerFields } : t)
+      : list;
+    if (editId) {
+      setTraps((p) => syncCustomer(p.map((t) => t.id === editId ? { ...trapForm, id:editId, lastChecked:d, nextCheck:nc } : t), editId));
+    } else {
+      const newId = Date.now();
+      setTraps((p) => syncCustomer([...p, { ...trapForm, id:newId, lastChecked:d, nextCheck:nc }], newId));
+    }
+    setShowTrapModal(false); setEditId(null); setTrapForm(blankTrap);
+  };
+
+  const saveInsp = () => {
+    if (!inspForm.location.trim()) return;
+    const pts = inspForm.entryPoints.trim() ? inspForm.entryPoints.split(",").map((p) => p.trim()).filter(Boolean) : [];
+    const fud = inspForm.followUpDate || addDays(7);
+    setInspections((p) => [...p, { id:Date.now(), date:today, location:inspForm.location.trim(), client:inspForm.client.trim(), notes:inspForm.notes.trim(), entryPoints:pts, severity:inspForm.severity, followUpDate:fud, aiAnalysis:null }]);
+    setShowInspModal(false); setInspForm(blankInsp);
+  };
+
+  const sortedTraps = [...traps].sort((a,b) => (TRAP_RANK[a.type]||99)-(TRAP_RANK[b.type]||99));
+
+  const calDates = {};
+  traps.forEach((t) => {
+    if (t.lastChecked) { if (!calDates[t.lastChecked]) calDates[t.lastChecked]=[]; calDates[t.lastChecked].push({type:"trap",item:t}); }
+    if (t.nextCheck)   { if (!calDates[t.nextCheck])   calDates[t.nextCheck]=[];   calDates[t.nextCheck].push({type:"check",item:t}); }
+  });
+  inspections.forEach((i) => {
+    if (i.date)         { if (!calDates[i.date])         calDates[i.date]=[];         calDates[i.date].push({type:"insp",item:i}); }
+    if (i.followUpDate) { if (!calDates[i.followUpDate]) calDates[i.followUpDate]=[]; calDates[i.followUpDate].push({type:"followup",item:i}); }
+  });
+
+  const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+  if (!isAuthenticated) {
+    return (
+      <div style={{ backgroundColor:T.bg, color:T.text, minHeight:"100vh", fontFamily:"'Courier New',monospace", display:"flex", alignItems:"center", justifyContent:"center", padding:"20px" }}>
+        <form onSubmit={handleLoginSubmit} style={{ backgroundColor:T.card, border:"2px solid "+T.border, borderRadius:"12px", padding:"24px", width:"100%", maxWidth:"380px" }}>
+          <div style={{ textAlign:"center", marginBottom:"20px" }}>
+            <div style={{ fontSize:"26px", color:T.primary, fontWeight:"bold" }}>🎯 TRAPTRACK</div>
+            <div style={{ fontSize:"11px", color:"#3a6a4a", fontWeight:"bold", marginTop:"4px" }}>GUARDIAN SECURITY GATEWAY</div>
+          </div>
+          <div style={{ marginBottom:"14px" }}>
+            <label style={{ display:"block", color:T.primary, fontSize:"10px", fontWeight:"bold", marginBottom:"5px" }}>TECHNICIAN NAME / LICENSE</label>
+            <input type="text" style={IS} placeholder="e.g. 123456" value={loginLicense} onChange={(e)=>setLoginLicense(e.target.value)} required />
+          </div>
+          <div style={{ marginBottom:"20px" }}>
+            <label style={{ display:"block", color:T.primary, fontSize:"10px", fontWeight:"bold", marginBottom:"5px" }}>PASSWORD PIN</label>
+            <input type="password" style={IS} placeholder="••••" value={loginPin} onChange={(e)=>setLoginPin(e.target.value)} required />
+          </div>
+          <button type="submit" style={{ width:"100%", padding:"14px", backgroundColor:T.primary, color:T.bg, border:"none", borderRadius:"8px", cursor:"pointer", fontSize:"14px", fontWeight:"bold" }}>
+            AUTHORIZE SECURE SIGN IN →
+          </button>
+        </form>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ backgroundColor:T.bg, color:T.text, minHeight:"100vh", fontFamily:"'Courier New',monospace", display:"flex", flexDirection:"column" }}>
+      <div style={{ flex:1, overflow:"auto", paddingBottom:"64px" }}>
+
+        {activeTab === "dashboard" && (
+          <div style={{ padding:"16px" }}>
+            <div style={{ marginBottom:"20px" }}>
+              <div style={{ fontSize:"22px", color:T.primary, fontWeight:"bold" }}>🎯 TRAPTRACK</div>
+              <div style={{ fontSize:"12px", color:T.text, fontWeight:"bold", marginTop:"2px" }}>by Guardian Systems</div>
+              <div style={{ fontSize:"9px", color:"#3a6a4a", marginTop:"3px" }}>Guardian Systems LLC · License: GT-2025-001</div>
+            </div>
+            <div style={{ backgroundColor:T.card, border:"2px solid "+T.primary, borderRadius:"12px", padding:"16px", marginBottom:"16px" }}>
+              <div style={{ fontSize:"10px", color:T.primary, fontWeight:"bold", marginBottom:"10px", letterSpacing:"1px" }}>OPERATION STATUS</div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px" }}>
+                {[["TOTAL",traps.length,T.primary,"tot",null,"All traps in system"],["DEPLOYED",traps.filter((t)=>t.deployLocation==="deployed").length,T.amber,"dep","deployed","Traps currently in the field"],["ACTIVE",traps.filter((t)=>t.status==="active").length,T.primary,"act","active","Armed and waiting for catch"],["TRIGGERED",traps.filter((t)=>t.status==="triggered").length,T.red,"tri","triggered","Animal caught — needs service"]].map(([lbl,val,col,key,filter,desc]) => (
+                  <button key={key} onClick={() => { setInvFilter(filter); setActiveTab("inventory"); }} style={{ backgroundColor:T.deep, padding:"12px", borderRadius:"8px", border:"1px solid "+col+"66", cursor:"pointer", textAlign:"left", position:"relative" }}>
+                    <div style={{ fontSize:"24px", color:col, fontWeight:"bold" }}>{val}</div>
+                    <div style={{ fontSize:"8px", color:"#3a6a4a", marginTop:"2px", fontWeight:"bold" }}>{lbl}</div>
+                    <div style={{ fontSize:"8px", color:col+"99", marginTop:"2px" }}>{desc}</div>
+                    <div style={{ position:"absolute", bottom:"6px", right:"8px", fontSize:"8px", color:col+"66" }}>→</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{ backgroundColor:T.card, border:"1px solid "+T.border, borderRadius:"12px", padding:"16px", marginBottom:"16px" }}>
+              <div style={{ fontSize:"10px", color:T.primary, fontWeight:"bold", marginBottom:"10px", letterSpacing:"1px" }}>FEATURES</div>
+              {[["📋","Inventory","Track every trap by location, status, type, and customer"],["📅","Calendar","Trap checks and inspections both appear on calendar"],["🗺️","Map","GPS coordinates linked to Google Maps"],["📸","Inspections","Document entry points, notes, follow-ups"],["🦊","Species Guide","19 species with footprints, young ID, and sounds"],["⚙️","Status","Tap status badge to update from a popup picker"]].map(([icon,title,desc]) => (
+                <button key={title} onClick={()=>setSelFeature(selFeature===title?null:title)} style={{ width:"100%", backgroundColor:"transparent", border:"none", borderBottom:"1px solid "+T.border, cursor:"pointer", textAlign:"left", padding:"10px 0", display:"flex", alignItems:"center", gap:"10px" }}>
+                  <span style={{ fontSize:"18px" }}>{icon}</span>
+                  <div>
+                    <div style={{ fontSize:"11px", color:T.text, fontWeight:"bold" }}>{title}</div>
+                    {selFeature===title && <div style={{ fontSize:"9px", color:"#3a6a4a", marginTop:"3px" }}>{desc}</div>}
+                  </div>
+                </button>
+              ))}
+            </div>
+            <button onClick={()=>setActiveTab("inventory")} style={{ width:"100%", padding:"14px", backgroundColor:T.primary, color:T.bg, border:"none", borderRadius:"8px", cursor:"pointer", fontSize:"13px", fontWeight:"bold" }}>START OPERATIONS →</button>
+          </div>
+        )}
+
+        {activeTab === "inventory" && (
+          <div style={{ padding:"16px" }}>
+            <div style={{ marginBottom:"12px" }}>
+              <div style={{ fontSize:"10px", color:"#3a6a4a", letterSpacing:"2px" }}>INVENTORY</div>
+              <div style={{ fontSize:"22px", color:T.primary, fontWeight:"bold" }}>{traps.length} TRAPS</div>
+            </div>
+
+            {invFilter && (
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", backgroundColor:T.amber+"20", border:"1px solid "+T.amber+"55", borderRadius:"8px", padding:"8px 12px", marginBottom:"10px" }}>
+                <div style={{ fontSize:"10px", color:T.amber, fontWeight:"bold" }}>
+                  {invFilter==="deployed"?"🎯 DEPLOYED TRAPS":invFilter==="active"?"🟢 ACTIVE TRAPS":"🔴 TRIGGERED TRAPS"}
+                </div>
+                <button onClick={()=>setInvFilter(null)} style={{ background:"none", border:"none", color:T.amber, cursor:"pointer", fontSize:"11px", fontWeight:"bold" }}>SHOW ALL ✕</button>
+              </div>
+            )}
+
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"8px", marginBottom:"12px" }}>
+              {[["ON TRUCK",traps.filter((t)=>t.deployLocation==="truck").length,T.primary],["DEPLOYED",traps.filter((t)=>t.deployLocation==="deployed").length,T.amber],["STORAGE",traps.filter((t)=>t.deployLocation==="storage").length,T.blue]].map(([l,v,c]) => (
+                <div key={l} style={{ backgroundColor:T.card, border:"2px solid "+c, borderRadius:"8px", padding:"10px", textAlign:"center" }}>
+                  <div style={{ fontSize:"22px", color:c, fontWeight:"bold" }}>{v}</div>
+                  <div style={{ fontSize:"8px", color:"#3a6a4a" }}>{l}</div>
+                </div>
+              ))}
+            </div>
+            <button onClick={()=>{setEditId(null);setTrapForm(blankTrap);setShowTrapModal(true);}} style={{ width:"100%", padding:"12px", backgroundColor:T.primary, color:T.bg, border:"none", borderRadius:"8px", cursor:"pointer", fontSize:"12px", fontWeight:"bold", marginBottom:"12px" }}>+ NEW TRAP</button>
+            {(()=>{
+              const filtered = invFilter==="deployed" ? sortedTraps.filter((t)=>t.deployLocation==="deployed")
+                : invFilter==="active" ? sortedTraps.filter((t)=>t.status==="active")
+                : invFilter==="triggered" ? sortedTraps.filter((t)=>t.status==="triggered")
+                : sortedTraps;
+              if (filtered.length===0) return <div style={{ textAlign:"center", padding:"30px", color:"#3a6a4a", fontSize:"11px" }}>No traps match this filter.</div>;
+              return filtered.map((trap) => (
+              <div key={trap.id} style={{ backgroundColor:T.card, border:"1px solid "+T.border, borderRadius:"10px", padding:"12px", marginBottom:"10px" }}>
+                <div style={{ display:"flex", gap:"10px", alignItems:"flex-start", marginBottom:"8px" }}>
+                  <div style={{ flexShrink:0, opacity:0.85 }}><TrapIcon type={trap.type} size={44} /></div>
+                  <div style={{ flex:1, minWidth:0, cursor:"pointer" }} onClick={()=>setZoomModal({title:trap.name, items:[TRAP_LBL[trap.type]||trap.type, "📍 "+trap.location+(trap.trapLocation?" — "+trap.trapLocation:""), trap.address?"🏠 "+trap.address:null, trap.nextCheck?"📅 Next: "+trap.nextCheck+" ("+daysUntil(trap.nextCheck)+")":null, trap.customerName?"👤 "+trap.customerName:null, trap.customerPhone?"📞 "+trap.customerPhone:null].filter(Boolean)})}>
+                    <div style={{ fontSize:"13px", color:T.text, fontWeight:"bold" }}>{trap.name}</div>
+                    <div style={{ fontSize:"9px", color:"#3a6a4a" }}>{TRAP_LBL[trap.type]||trap.type}</div>
+                    <div style={{ fontSize:"9px", color:"#3a6a4a" }}>📍 {trap.location}{trap.trapLocation?" — "+trap.trapLocation:""}</div>
+                    {trap.address && <div style={{ fontSize:"9px", color:"#3a6a4a" }}>🏠 {trap.address}</div>}
+                    {trap.nextCheck && <div style={{ fontSize:"9px", color:urgC(trap.nextCheck) }}>Next: {trap.nextCheck} ({daysUntil(trap.nextCheck)})</div>}
+                  </div>
+                  <div style={{ position:"relative", flexShrink:0 }}>
+                    <button onClick={(e)=>{e.stopPropagation();setStatusPopupId(statusPopupId===trap.id?null:trap.id);}} style={{ backgroundColor:sc(trap.status)+"22", padding:"5px 8px", borderRadius:"5px", fontSize:"8px", color:sc(trap.status), fontWeight:"bold", border:"1px solid "+sc(trap.status), cursor:"pointer" }}>
+                      {trap.status.toUpperCase()} ▾
+                    </button>
+                    {statusPopupId===trap.id && (
+                      <div style={{ position:"absolute", right:0, top:"110%", backgroundColor:T.card, border:"1px solid "+T.primary, borderRadius:"8px", zIndex:500, minWidth:"130px", overflow:"hidden", boxShadow:"0 4px 20px rgba(0,0,0,0.8)" }} onClick={(e)=>e.stopPropagation()}>
+                        {["active","triggered","checked","reset","removed"].map((st) => (
+                          <button key={st} onClick={()=>{setTraps((p)=>p.map((t)=>t.id===trap.id?{...t,status:st}:t));setStatusPopupId(null);}} style={{ display:"block", width:"100%", padding:"9px 12px", backgroundColor:trap.status===st?sc(st)+"33":"transparent", border:"none", borderBottom:"1px solid "+T.border, color:sc(st), fontSize:"10px", fontWeight:"bold", cursor:"pointer", textAlign:"left" }}>
+                            {st==="active"?"🟢":st==="triggered"?"🔴":st==="checked"?"🔵":st==="reset"?"🟡":"⚫"} {st.toUpperCase()}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div style={{ fontSize:"9px", color:"#3a6a4a", marginBottom:"8px", padding:"4px 8px", backgroundColor:T.deep, borderRadius:"4px", display:"flex", gap:"8px", alignItems:"center" }}>
+                  <span>{trap.deployLocation==="truck"?"🚐 ON TRUCK":trap.deployLocation==="deployed"?"🎯 DEPLOYED":"📦 STORAGE"}</span>
+                  {trap.propertyType && <span style={{ color:T.blue+"99" }}>·</span>}
+                  {trap.propertyType && <span>{trap.propertyType==="primary"?"🏠 Primary":trap.propertyType==="rental"?"🏘️ Rental":trap.propertyType==="commercial"?"🏢 Commercial":trap.propertyType==="vacation"?"🏖️ Vacation":"📍 Other"}</span>}
+                </div>
+                {trap.customerName && (
+                  <button onClick={()=>setCustModal(trap.id)} style={{ display:"block", width:"100%", marginBottom:"8px", padding:"7px", backgroundColor:T.blue+"15", color:T.blue, border:"1px solid "+T.blue+"33", borderRadius:"6px", cursor:"pointer", fontSize:"9px", fontWeight:"bold", textAlign:"left" }}>
+                    👤 {trap.customerName}{trap.customerPhone?" · "+trap.customerPhone:""}{trap.customerAddress?"\n🏠 "+trap.customerAddress:""}
+                  </button>
+                )}
+                <div style={{ display:"flex", gap:"8px" }}>
+                  <button onClick={()=>{setEditId(trap.id);setTrapForm({...trap});setShowTrapModal(true);}} style={{ flex:1, padding:"6px", backgroundColor:T.blue+"20", color:T.blue, border:"none", borderRadius:"4px", cursor:"pointer", fontSize:"9px", fontWeight:"bold" }}>EDIT</button>
+                  <button onClick={()=>setTraps((p)=>p.filter((t)=>t.id!==trap.id))} style={{ flex:1, padding:"6px", backgroundColor:T.red+"20", color:T.red, border:"none", borderRadius:"4px", cursor:"pointer", fontSize:"9px", fontWeight:"bold" }}>DELETE</button>
+                </div>
+              </div>
+            ));
+            })()}
+          </div>
+        )}
+
+        {activeTab === "calendar" && (
+          <div style={{ padding:"16px" }}>
+            <div style={{ marginBottom:"12px" }}>
+              <div style={{ fontSize:"10px", color:"#3a6a4a", letterSpacing:"2px" }}>CALENDAR</div>
+              <div style={{ fontSize:"20px", color:T.primary, fontWeight:"bold" }}>{MONTHS[calMonth.getMonth()]} {calMonth.getFullYear()}</div>
+              <div style={{ display:"flex", gap:"10px", fontSize:"8px", color:"#3a6a4a", marginTop:"3px", flexWrap:"wrap" }}>
+                <span style={{ color:T.primary }}>● Checked</span>
+                <span style={{ color:T.amber }}>● Scheduled</span>
+                <span style={{ color:T.blue }}>● Inspection</span>
+                <span style={{ color:T.red }}>● Follow-up</span>
+              </div>
+            </div>
+            <div style={{ backgroundColor:T.card, border:"1px solid "+T.border, borderRadius:"8px", padding:"12px" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"12px" }}>
+                <button onClick={()=>setCalMonth((m)=>new Date(m.getFullYear(),m.getMonth()-1))} style={{ backgroundColor:"transparent", border:"1px solid "+T.border, color:T.primary, padding:"4px 10px", borderRadius:"4px", cursor:"pointer", fontSize:"10px", fontWeight:"bold" }}>← PREV</button>
+                <div style={{ fontSize:"11px", color:T.text, fontWeight:"bold" }}>{MONTHS[calMonth.getMonth()]}</div>
+                <button onClick={()=>setCalMonth((m)=>new Date(m.getFullYear(),m.getMonth()+1))} style={{ backgroundColor:"transparent", border:"1px solid "+T.border, color:T.primary, padding:"4px 10px", borderRadius:"4px", cursor:"pointer", fontSize:"10px", fontWeight:"bold" }}>NEXT →</button>
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:"3px", marginBottom:"4px" }}>
+                {["S","M","T","W","T","F","S"].map((d,i) => <div key={i} style={{ textAlign:"center", fontSize:"8px", color:"#3a6a4a", fontWeight:"bold" }}>{d}</div>)}
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:"3px" }}>
+                {(()=>{
+                  const y=calMonth.getFullYear(), m=calMonth.getMonth();
+                  const days=[];
+                  for (let i=0; i<new Date(y,m,1).getDay(); i++) days.push(null);
+                  for (let i=1; i<=new Date(y,m+1,0).getDate(); i++) days.push(new Date(y,m,i));
+                  return days.map((date,idx) => {
+                    const ds = date&&date.toISOString().split("T")[0];
+                    const items = (ds&&calDates[ds])||[];
+                    const hasTrap    = items.some((x)=>x.type==="trap");
+                    const hasCheck   = items.some((x)=>x.type==="check");
+                    const hasInsp    = items.some((x)=>x.type==="insp");
+                    const hasFollowup= items.some((x)=>x.type==="followup");
+                    const hasAnything = items.length > 0;
+                    const isToday = ds===today;
+                    const isSel = date&&selDate&&date.toDateString()===selDate.toDateString();
+                    return (
+                      <button key={idx} onClick={()=>date&&setSelDate(date)} style={{ padding:"4px 1px", aspectRatio:"1", borderRadius:"4px", border:"1px solid "+(isSel?T.primary:isToday?T.blue:hasAnything?T.primary+"55":T.border), backgroundColor:isSel?T.primary+"33":isToday?T.blue+"11":hasAnything?T.primary+"08":T.deep, color:isSel?T.primary:isToday?T.blue:date?T.text:"#3a6a4a", fontSize:"9px", fontWeight:"600", cursor:date?"pointer":"default", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:"1px" }}>
+                        {date && <>
+                          <div>{date.getDate()}</div>
+                          <div style={{ display:"flex", gap:"1px" }}>
+                            {hasTrap     && <div style={{ fontSize:"5px", color:T.primary }}>●</div>}
+                            {hasCheck    && <div style={{ fontSize:"5px", color:T.amber }}>●</div>}
+                            {hasInsp     && <div style={{ fontSize:"5px", color:T.blue }}>●</div>}
+                            {hasFollowup && <div style={{ fontSize:"5px", color:T.red }}>●</div>}
+                          </div>
+                        </>}
+                      </button>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "map" && (
+          <div style={{ padding:"16px" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"10px" }}>
+              <div>
+                <div style={{ fontSize:"10px", color:"#3a6a4a", letterSpacing:"2px" }}>MAP</div>
+                <div style={{ fontSize:"20px", color:T.primary, fontWeight:"bold" }}>Active Traps</div>
+              </div>
+              <div style={{ display:"flex", gap:"8px", fontSize:"8px" }}>
+                <span style={{ color:T.primary }}>● Active</span>
+                <span style={{ color:T.red }}>● Captured</span>
+                <span style={{ color:T.blue }}>● Checked</span>
+                <span style={{ color:T.amber }}>📍 You</span>
+              </div>
+            </div>
+
+            <div id="traptrack-map" style={{ width:"100%", height:"360px", borderRadius:"12px", border:"2px solid "+T.border, marginBottom:"14px", overflow:"hidden" }} />
+
+            <div style={{ marginBottom:"10px", display:"flex", gap:"8px" }}>
+              <a href={"https://www.google.com/maps/search/?api=1&query=San+Antonio,TX"} target="_blank" rel="noopener noreferrer" style={{ flex:1, display:"block", padding:"10px", backgroundColor:T.card, border:"1px solid "+T.border, borderRadius:"8px", color:T.primary, fontSize:"10px", fontWeight:"bold", textDecoration:"none", textAlign:"center" }}>
+                🗺️ Open Google Maps
+              </a>
+            </div>
+
+            <div style={{ fontSize:"10px", color:T.primary, fontWeight:"bold", marginBottom:"8px" }}>
+              🎯 ACTIVE TRAPS ({traps.filter(t=>t.deployLocation==="deployed").length})
+            </div>
+            {traps.filter(t=>t.deployLocation==="deployed").map(trap => (
+              <div key={trap.id} style={{ backgroundColor:T.card, border:"1px solid "+(trap.status==="triggered"?T.red:trap.status==="active"?T.primary:T.border), borderRadius:"10px", padding:"12px", marginBottom:"8px" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:"6px" }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:"12px", color:T.text, fontWeight:"bold" }}>{trap.name}</div>
+                    {trap.customerName ? <div style={{ fontSize:"10px", color:T.blue }}>👤 {trap.customerName}</div> : null}
+                    {trap.address ? <div style={{ fontSize:"9px", color:"#a8d4b8" }}>🏠 {trap.address}</div> : null}
+                    {trap.trapLocation ? <div style={{ fontSize:"9px", color:"#3a6a4a" }}>📍 {trap.trapLocation}</div> : null}
+                  </div>
+                  <div style={{ backgroundColor:(trap.status==="triggered"?T.red:trap.status==="active"?T.primary:T.blue)+"22", padding:"4px 8px", borderRadius:"5px", fontSize:"8px", color:(trap.status==="triggered"?T.red:trap.status==="active"?T.primary:T.blue), fontWeight:"bold", border:"1px solid "+(trap.status==="triggered"?T.red:trap.status==="active"?T.primary:T.blue) }}>
+                    {trap.status.toUpperCase()}
+                  </div>
+                </div>
+                <div style={{ display:"flex", gap:"6px" }}>
+                  {trap.lat && trap.lng ? (
+                    <a href={"https://www.google.com/maps?q="+trap.lat+","+trap.lng} target="_blank" rel="noopener noreferrer" style={{ flex:1, display:"block", padding:"8px", backgroundColor:"#4285F4"+"22", border:"1px solid #4285F444", borderRadius:"6px", color:"#4285F4", fontSize:"9px", fontWeight:"bold", textDecoration:"none", textAlign:"center" }}>
+                      🗺️ Google Maps
+                    </a>
+                  ) : trap.address ? (
+                    <a href={"https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(trap.address)} target="_blank" rel="noopener noreferrer" style={{ flex:1, display:"block", padding:"8px", backgroundColor:"#4285F4"+"22", border:"1px solid #4285F444", borderRadius:"6px", color:"#4285F4", fontSize:"9px", fontWeight:"bold", textDecoration:"none", textAlign:"center" }}>
+                      🗺️ Google Maps
+                    </a>
+                  ) : null}
+                  {trap.customerPhone ? (
+                    <a href={"tel:"+(trap.customerPhone||"").replace(/[^\d+]/g,"")} style={{ flex:1, display:"block", padding:"8px", backgroundColor:T.primary+"15", border:"1px solid "+T.primary+"33", borderRadius:"6px", color:T.primary, fontSize:"9px", fontWeight:"bold", textDecoration:"none", textAlign:"center" }}>
+                      📞 Call
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === "inspection" && (
+          <div style={{ padding:"16px" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom:"12px" }}>
+              <div>
+                <div style={{ fontSize:"10px", color:"#3a6a4a", letterSpacing:"2px" }}>INSPECTION LOG</div>
+                <div style={{ fontSize:"20px", color:T.primary, fontWeight:"bold" }}>{inspections.length} Records</div>
+              </div>
+              <div style={{ fontSize:"9px", color:"#3a6a4a", textAlign:"right" }}>
+                <div>{traps.filter((t)=>t.nextCheck).length} trap checks</div>
+                <div>{inspections.filter((i)=>i.followUpDate).length} follow-ups</div>
+              </div>
+            </div>
+            <button onClick={()=>{setInspForm(blankInsp);setShowInspModal(true);}} style={{ width:"100%", padding:"13px", backgroundColor:T.primary, color:T.bg, border:"none", borderRadius:"8px", cursor:"pointer", fontSize:"13px", fontWeight:"bold", marginBottom:"14px" }}>+ NEW INSPECTION</button>
+
+            <div style={{ backgroundColor:T.card, border:"2px solid "+T.amber, borderRadius:"10px", padding:"14px", marginBottom:"16px" }}>
+                <div style={{ fontSize:"10px", color:T.amber, fontWeight:"bold", marginBottom:"10px", letterSpacing:"1px" }}>📋 FOLLOW-UP QUEUE — tap to log service</div>
+
+                {traps.filter((t)=>t.nextCheck).length===0 && inspections.filter((i)=>i.followUpDate).length===0 && (
+                  <div style={{ textAlign:"center", padding:"16px", color:"#3a6a4a", fontSize:"10px" }}>No upcoming checks or follow-ups scheduled.</div>
+                )}
+
+                {(()=>{
+                  const overdue = [
+                    ...traps.filter((t)=>t.nextCheck && Math.ceil((new Date(t.nextCheck)-new Date(today))/86400000)<=0).sort((a,b)=>a.nextCheck.localeCompare(b.nextCheck)),
+                  ];
+                  const overdueInsp = inspections.filter((i)=>i.followUpDate && Math.ceil((new Date(i.followUpDate)-new Date(today))/86400000)<=0).sort((a,b)=>a.followUpDate.localeCompare(b.followUpDate));
+                  if (overdue.length===0 && overdueInsp.length===0) return null;
+                  return (
+                    <>
+                      <div style={{ fontSize:"8px", color:T.red, fontWeight:"bold", marginBottom:"6px", letterSpacing:"1px" }}>⚠️ OVERDUE / DUE TODAY</div>
+                      {overdue.map((trap) => (
+                        <button key={"t"+trap.id} onClick={()=>openFupPopup({type:"trap",item:trap})} style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center", backgroundColor:T.deep, borderRadius:"6px", padding:"10px 12px", marginBottom:"6px", border:"1px solid "+T.red+"55", borderLeft:"3px solid "+T.red, cursor:"pointer", textAlign:"left" }}>
+                          <div>
+                            <div style={{ fontSize:"11px", color:T.text, fontWeight:"bold" }}>🎯 {trap.name}</div>
+                            {trap.customerName && <div style={{ fontSize:"9px", color:T.blue }}>👤 {trap.customerName}</div>}
+                            <div style={{ fontSize:"9px", color:"#3a6a4a" }}>{trap.location} · {trap.nextCheck}</div>
+                          </div>
+                          <div style={{ textAlign:"right" }}>
+                            <div style={{ fontSize:"11px", fontWeight:"bold", color:T.red }}>{daysUntil(trap.nextCheck)}</div>
+                            <div style={{ fontSize:"8px", color:T.blue, border:"1px solid "+T.blue+"44", padding:"2px 5px", borderRadius:"3px", marginTop:"3px" }}>TAP</div>
+                          </div>
+                        </button>
+                      ))}
+                      {overdueInsp.map((insp) => (
+                        <button key={"i"+insp.id} onClick={()=>openFupPopup({type:"insp",item:insp})} style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center", backgroundColor:T.deep, borderRadius:"6px", padding:"10px 12px", marginBottom:"6px", border:"1px solid "+T.red+"55", borderLeft:"3px solid "+T.red, cursor:"pointer", textAlign:"left" }}>
+                          <div>
+                            <div style={{ fontSize:"11px", color:T.text, fontWeight:"bold" }}>📸 {insp.location}</div>
+                            {insp.client && <div style={{ fontSize:"9px", color:T.blue }}>👤 {insp.client}</div>}
+                            <div style={{ fontSize:"9px", color:"#3a6a4a" }}>Follow-up due: {insp.followUpDate}</div>
+                          </div>
+                          <div style={{ textAlign:"right" }}>
+                            <div style={{ fontSize:"11px", fontWeight:"bold", color:T.red }}>{daysUntil(insp.followUpDate)}</div>
+                            <div style={{ fontSize:"8px", color:T.blue, border:"1px solid "+T.blue+"44", padding:"2px 5px", borderRadius:"3px", marginTop:"3px" }}>TAP</div>
+                          </div>
+                        </button>
+                      ))}
+                    </>
+                  );
+                })()}
+
+                {(()=>{
+                  const upcoming = traps.filter((t)=>t.nextCheck && Math.ceil((new Date(t.nextCheck)-new Date(today))/86400000)>0).sort((a,b)=>a.nextCheck.localeCompare(b.nextCheck));
+                  const upcomingInsp = inspections.filter((i)=>i.followUpDate && Math.ceil((new Date(i.followUpDate)-new Date(today))/86400000)>0).sort((a,b)=>a.followUpDate.localeCompare(b.followUpDate));
+                  if (upcoming.length===0 && upcomingInsp.length===0) return null;
+                  return (
+                    <>
+                      <div style={{ fontSize:"8px", color:T.primary, fontWeight:"bold", marginBottom:"6px", marginTop:"8px", letterSpacing:"1px" }}>📅 UPCOMING</div>
+                      {upcoming.map((trap) => (
+                        <button key={"t"+trap.id} onClick={()=>openFupPopup({type:"trap",item:trap})} style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center", backgroundColor:T.deep, borderRadius:"6px", padding:"10px 12px", marginBottom:"6px", border:"1px solid "+T.border, borderLeft:"3px solid "+urgC(trap.nextCheck), cursor:"pointer", textAlign:"left" }}>
+                          <div>
+                            <div style={{ fontSize:"11px", color:T.text, fontWeight:"bold" }}>🎯 {trap.name}</div>
+                            {trap.customerName && <div style={{ fontSize:"9px", color:T.blue }}>👤 {trap.customerName}</div>}
+                            <div style={{ fontSize:"9px", color:"#3a6a4a" }}>{trap.location} · {trap.nextCheck}</div>
+                          </div>
+                          <div style={{ textAlign:"right" }}>
+                            <div style={{ fontSize:"11px", fontWeight:"bold", color:urgC(trap.nextCheck) }}>{daysUntil(trap.nextCheck)}</div>
+                            <div style={{ fontSize:"8px", color:T.blue, border:"1px solid "+T.blue+"44", padding:"2px 5px", borderRadius:"3px", marginTop:"3px" }}>TAP</div>
+                          </div>
+                        </button>
+                      ))}
+                      {upcomingInsp.map((insp) => (
+                        <button key={"i"+insp.id} onClick={()=>openFupPopup({type:"insp",item:insp})} style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center", backgroundColor:T.deep, borderRadius:"6px", padding:"10px 12px", marginBottom:"6px", border:"1px solid "+T.border, borderLeft:"3px solid "+urgC(insp.followUpDate), cursor:"pointer", textAlign:"left" }}>
+                          <div>
+                            <div style={{ fontSize:"11px", color:T.text, fontWeight:"bold" }}>📸 {insp.location}</div>
+                            {insp.client && <div style={{ fontSize:"9px", color:T.blue }}>👤 {insp.client}</div>}
+                            <div style={{ fontSize:"9px", color:"#3a6a4a" }}>Follow-up due: {insp.followUpDate}</div>
+                          </div>
+                          <div style={{ textAlign:"right" }}>
+                            <div style={{ fontSize:"11px", fontWeight:"bold", color:urgC(insp.followUpDate) }}>{daysUntil(insp.followUpDate)}</div>
+                            <div style={{ fontSize:"8px", color:T.blue, border:"1px solid "+T.blue+"44", padding:"2px 5px", borderRadius:"3px", marginTop:"3px" }}>TAP</div>
+                          </div>
+                        </button>
+                      ))}
+                    </>
+                  );
+                })()}
+              </div>
+
+            <div style={{ fontSize:"9px", color:"#3a6a4a", fontWeight:"bold", marginBottom:"8px" }}>ALL INSPECTIONS</div>
+            {inspections.length===0 && (
+              <div style={{ textAlign:"center", padding:"40px", backgroundColor:T.card, borderRadius:"10px", border:"1px solid "+T.border }}>
+                <div style={{ fontSize:"28px", marginBottom:"8px" }}>📋</div>
+                <div style={{ color:T.text, fontSize:"12px", fontWeight:"bold" }}>No inspections yet</div>
+                <div style={{ color:"#3a6a4a", fontSize:"11px" }}>Tap + NEW INSPECTION to start</div>
+              </div>
+            )}
+            {[...inspections].sort((a,b)=>b.date.localeCompare(a.date)).map((insp) => (
+              <div key={insp.id} style={{ backgroundColor:T.card, border:"1px solid "+T.border, borderRadius:"10px", padding:"12px", marginBottom:"10px" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", cursor:"pointer" }} onClick={()=>setExpandedInsp(expandedInsp===insp.id?null:insp.id)}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:"13px", color:T.text, fontWeight:"bold" }}>{insp.location}</div>
+                    {insp.client && <div style={{ fontSize:"10px", color:T.blue }}>{insp.client}</div>}
+                    <div style={{ fontSize:"9px", color:"#3a6a4a" }}>{insp.date}{insp.followUpDate && <span style={{ color:urgC(insp.followUpDate) }}> · Follow-up {daysUntil(insp.followUpDate)}</span>}</div>
+                  </div>
+                  <div style={{ display:"flex", gap:"6px", alignItems:"center", marginLeft:"8px" }}>
+                    <div style={{ backgroundColor:insp.severity==="high"?T.red:insp.severity==="medium"?T.amber:T.primary, color:T.bg, padding:"3px 8px", borderRadius:"4px", fontSize:"8px", fontWeight:"bold" }}>{insp.severity.toUpperCase()}</div>
+                    <span style={{ color:T.primary, fontSize:"11px" }}>{expandedInsp===insp.id?"▼":"▶"}</span>
+                  </div>
+                </div>
+                {expandedInsp===insp.id && (
+                  <div style={{ marginTop:"12px", paddingTop:"12px", borderTop:"1px solid "+T.border }}>
+                    <div onClick={(e)=>{e.stopPropagation();setNotesId(insp.id);setNotesText(insp.notes||"");}} style={{ backgroundColor:T.deep, padding:"10px", borderRadius:"6px", marginBottom:"8px", cursor:"pointer", border:"1px solid "+T.blue+"44" }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"4px" }}>
+                        <div style={{ color:T.blue, fontWeight:"bold", fontSize:"9px" }}>📝 NOTES — tap to edit</div>
+                        {insp.notes && <button onClick={(e)=>{e.stopPropagation();setZoomModal({title:"📝 NOTES — "+insp.location,content:insp.notes});}} style={{ background:"none", border:"1px solid "+T.blue+"44", borderRadius:"4px", color:T.blue, fontSize:"10px", cursor:"pointer", padding:"1px 6px" }}>🔍</button>}
+                      </div>
+                      <div style={{ color:insp.notes?T.text:"#3a6a4a", fontSize:"11px", fontStyle:insp.notes?"normal":"italic" }}>{insp.notes||"No notes yet. Tap to add."}</div>
+                    </div>
+                    <div onClick={(e)=>{e.stopPropagation();setEntryId(insp.id);setEntryText((insp.entryPoints||[]).join(", "));}} style={{ backgroundColor:T.deep, padding:"10px", borderRadius:"6px", marginBottom:"8px", cursor:"pointer", border:"1px solid "+T.blue+"44" }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"4px" }}>
+                        <div style={{ color:T.blue, fontWeight:"bold", fontSize:"9px" }}>🚪 ENTRY POINTS — tap to edit</div>
+                        {insp.entryPoints&&insp.entryPoints.length>0 && <button onClick={(e)=>{e.stopPropagation();setZoomModal({title:"🚪 ENTRY POINTS — "+insp.location,items:insp.entryPoints});}} style={{ background:"none", border:"none", stroke:T.blue, color:T.blue, fontSize:"10px", cursor:"pointer", padding:"1px 6px" }}>🔍</button>}
+                      </div>
+                      {insp.entryPoints&&insp.entryPoints.length>0 ? insp.entryPoints.map((pt,i)=><div key={i} style={{ color:T.text, fontSize:"11px" }}>• {pt}</div>) : <div style={{ color:"#3a6a4a", fontSize:"11px", fontStyle:"italic" }}>No entry points logged.</div>}
+                    </div>
+                    <div style={{ display:"flex", gap:"8px" }}>
+                      <button onClick={(e)=>{e.stopPropagation();setEditInspId(insp.id);setEditInspData({notes:insp.notes||"",entryPoints:(insp.entryPoints||[]).join(", "),followUpDate:insp.followUpDate||""});}} style={{ flex:1, padding:"9px", backgroundColor:T.blue+"15", color:T.blue, border:"1px solid "+T.blue+"33", borderRadius:"6px", cursor:"pointer", fontSize:"10px", fontWeight:"bold" }}>EDIT ALL</button>
+                      <button onClick={(e)=>{e.stopPropagation();setInspections((p)=>p.filter((i)=>i.id!==insp.id));setExpandedInsp(null);}} style={{ flex:1, padding:"9px", backgroundColor:T.red+"15", color:T.red, border:"1px solid "+T.red+"33", borderRadius:"6px", cursor:"pointer", fontSize:"10px", fontWeight:"bold" }}>DELETE</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === "animals" && (
+          <div style={{ padding:"16px" }}>
+            <div style={{ marginBottom:"12px" }}>
+              <div style={{ fontSize:"10px", color:"#3a6a4a", letterSpacing:"2px" }}>SPECIES GUIDE</div>
+              <div style={{ fontSize:"18px", color:T.primary, fontWeight:"bold" }}>Wildlife ID Reference</div>
+              <div style={{ fontSize:"9px", color:"#3a6a4a", marginTop:"2px" }}>Tap 🐾 for footprint · Tap 🍼 for young animal ID</div>
+            </div>
+            {ANIMALS.map((animal) => {
+              const soundQuery = encodeURIComponent(`${animal.name} animal call vocalization sound #shorts`);
+              return (
+                <div key={animal.name} style={{ backgroundColor:T.card, border:"1px solid "+T.border, borderRadius:"10px", padding:"12px", marginBottom:"8px" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:"10px", cursor:"pointer" }} onClick={()=>setExpandedAnimal(expandedAnimal===animal.name?null:animal.name)}>
+                    <span style={{ fontSize:"24px" }}>{animal.icon}</span>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:"13px", fontWeight:"bold", color:T.text }}>{animal.name}</div>
+                      <div style={{ fontSize:"8px", color:"#3a6a4a" }}>{animal.weight} · {animal.activity}</div>
+                      <div style={{ fontSize:"8px", color:T.primary }}>{animal.recommended}</div>
+                    </div>
+                    <div style={{ display:"flex", gap:"5px" }}>
+                      <button onClick={(e)=>{e.stopPropagation();setFpModal(animal.name);}} style={{ padding:"5px 7px", backgroundColor:T.primary+"20", color:T.primary, border:"1px solid "+T.primary+"44", borderRadius:"5px", cursor:"pointer", fontSize:"12px" }}>🐾</button>
+                      <button onClick={(e)=>{e.stopPropagation();setYoungModal(animal.name);}} style={{ padding:"5px 7px", backgroundColor:T.amber+"20", color:T.amber, border:"1px solid "+T.amber+"44", borderRadius:"5px", cursor:"pointer", fontSize:"12px" }}>🍼</button>
+                    </div>
+                    <span style={{ color:T.primary, fontSize:"11px" }}>{expandedAnimal===animal.name?"▼":"▶"}</span>
+                  </div>
+                  {expandedAnimal===animal.name && (
+                    <div style={{ marginTop:"12px", paddingTop:"12px", borderTop:"1px solid "+T.border }}>
+                      <div style={{ backgroundColor:T.primary+"18", border:"1px solid "+T.primary+"44", borderRadius:"7px", padding:"10px", marginBottom:"10px" }}>
+                        <div style={{ color:T.primary, fontSize:"8px", fontWeight:"bold", marginBottom:"3px" }}>RECOMMENDED</div>
+                        <div style={{ color:T.text, fontSize:"11px", fontWeight:"bold" }}>{animal.recommended}</div>
+                      </div>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"6px", marginBottom:"10px" }}>
+                        {[["HABITAT",animal.habitat],["DIET",animal.diet],["TRACKS",animal.tracks],["WEIGHT",animal.weight+" · "+animal.activity]].map(([lbl,val]) => (
+                          <button key={lbl} onClick={()=>setZoomModal({title:animal.icon+" "+animal.name+" — "+lbl,content:val})} style={{ backgroundColor:T.deep, padding:"8px", borderRadius:"6px", border:"1px solid "+T.border, textAlign:"left", cursor:"pointer" }}>
+                            <div style={{ color:T.primary, fontWeight:"bold", fontSize:"7px", marginBottom:"2px" }}>{lbl} 🔍</div>
+                            <div style={{ color:T.text, fontSize:"8px", lineHeight:"12px", overflow:"hidden", maxHeight:"24px" }}>{val}</div>
+                          </button>
+                        ))}
+                      </div>
+                      <div style={{ backgroundColor:T.deep, borderRadius:"6px", padding:"9px", marginBottom:"8px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                        <div style={{ fontSize:"8px", color:T.primary, fontWeight:"bold" }}>🔊 {animal.soundDesc}</div>
+                        <a href={`https://www.youtube.com/results?search_query=${soundQuery}`} target="_blank" rel="noopener noreferrer" onClick={(e)=>e.stopPropagation()} style={{ color:T.blue, fontSize:"9px", fontWeight:"bold", textDecoration:"none", padding:"4px 8px", border:"1px solid "+T.blue+"55", borderRadius:"4px", flexShrink:0, marginLeft:"8px" }}>▶ SHORTS</a>
+                      </div>
+                      <div style={{ backgroundColor:T.deep, padding:"9px", borderRadius:"6px", marginBottom:"8px", fontSize:"8px" }}>
+                        <div style={{ color:T.primary, fontWeight:"bold", marginBottom:"5px" }}>TIMING</div>
+                        {[["Mating",animal.mating],["Best Removal",animal.removal],["Season",animal.season],["Lifespan",animal.lifespan]].map(([l,v]) => (
+                          <div key={l} style={{ marginBottom:"3px" }}><span style={{ color:T.blue, fontWeight:"bold" }}>{l}: </span><span style={{ color:T.text }}>{v}</span></div>
+                        ))}
+                      </div>
+                      <div style={{ backgroundColor:T.amber+"12", border:"1px solid "+T.amber+"33", padding:"9px", borderRadius:"6px", fontSize:"8px" }}>
+                        <div style={{ color:T.amber, fontWeight:"bold", marginBottom:"6px" }}>TRAPPING METHODS</div>
+                        {animal.methods.map((m,i) => <div key={i} style={{ color:T.text, marginBottom:"3px" }}>• {m}</div>)}
+                        <div style={{ marginTop:"6px" }}><span style={{ color:T.blue, fontWeight:"bold" }}>Bait: </span><span style={{ color:T.text }}>{animal.bait}</span></div>
+                        <div><span style={{ color:T.blue, fontWeight:"bold" }}>Placement: </span><span style={{ color:T.text }}>{animal.placement}</span></div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {activeTab === "tech" && (
+          <div style={{ padding:"16px" }}>
+            <div style={{ marginBottom:"12px" }}>
+              <div style={{ fontSize:"10px", color:"#3a6a4a", letterSpacing:"2px" }}>TECHNICIAN</div>
+              <div style={{ fontSize:"20px", color:T.primary, fontWeight:"bold" }}>AI Customer Tracker</div>
+            </div>
+            <div style={{ backgroundColor:T.card, border:"2px solid #8b5cf6", borderRadius:"12px", padding:"14px", marginBottom:"16px" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"10px" }}>
+                <div>
+                  <div style={{ fontSize:"11px", color:"#c4b5fd", fontWeight:"bold" }}>🤖 AI CUSTOMER TRACKER</div>
+                  {aiTracking&&aiTracking.updatedAt ? <div style={{ fontSize:"8px", color:"#a8d4b8", marginTop:"2px" }}>Updated {aiTracking.updatedAt}</div> : null}
+                </div>
+                <button onClick={generateCustomerReport} disabled={aiTracking&&aiTracking.status==="loading"} style={{ padding:"8px 14px", backgroundColor:"#8b5cf6", border:"none", color:"#fff", borderRadius:"7px", cursor:"pointer", fontSize:"10px", fontWeight:"bold" }}>
+                  {aiTracking&&aiTracking.status==="loading" ? "⏳ Analyzing..." : "✨ Analyze All Customers"}
+                </button>
+              </div>
+              {aiTracking&&aiTracking.status==="ok" ? (
+                <div style={{ backgroundColor:T.deep, borderRadius:"8px", padding:"12px", marginBottom:"10px", maxHeight:"300px", overflowY:"auto" }}>
+                  <div style={{ fontSize:"11px", color:"#e2e8f0", lineHeight:"18px", whiteSpace:"pre-wrap" }}>{aiTracking.report}</div>
+                </div>
+              ) : aiTracking&&aiTracking.status==="error" ? (
+                <div style={{ backgroundColor:T.red+"15", borderRadius:"8px", padding:"10px", marginBottom:"10px", fontSize:"10px", color:T.red }}>{aiTracking.report}</div>
+              ) : (
+                <div style={{ backgroundColor:T.deep, borderRadius:"8px", padding:"12px", marginBottom:"10px", fontSize:"9px", color:"#a8d4b8", textAlign:"center" }}>Tap Analyze to get AI insights on all customers</div>
+              )}
+              <div style={{ borderTop:"1px solid #8b5cf655", paddingTop:"10px" }}>
+                <div style={{ fontSize:"9px", color:"#c4b5fd", fontWeight:"bold", marginBottom:"5px" }}>💬 ASK ABOUT YOUR CUSTOMERS</div>
+                <div style={{ display:"flex", gap:"6px" }}>
+                  <input type="text" value={aiQuery} onChange={e=>setAiQuery(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")askAIQuery();}} placeholder='e.g. "Who is overdue?"' style={{ flex:1, padding:"9px 10px", backgroundColor:T.deep, border:"1px solid #8b5cf655", borderRadius:"6px", color:T.text, fontSize:"11px", fontFamily:"'Courier New',monospace", boxSizing:"border-box" }} />
+                  <button onClick={askAIQuery} disabled={aiQueryLoading||!aiQuery.trim()} style={{ padding:"8px 12px", backgroundColor:"#8b5cf6", border:"none", color:"#fff", borderRadius:"7px", cursor:"pointer", fontSize:"11px", fontWeight:"bold" }}>{aiQueryLoading?"...":"Ask"}</button>
+                </div>
+                {aiQueryResult ? (
+                  <div style={{ marginTop:"8px", backgroundColor:T.deep, borderRadius:"7px", padding:"10px", fontSize:"11px", color:"#e2e8f0", lineHeight:"17px", whiteSpace:"pre-wrap" }}>
+                    {aiQueryResult}
+                    <button onClick={()=>{setAiQueryResult(null);setAiQuery("");}} style={{ display:"block", marginTop:"6px", background:"none", border:"none", color:"#a8d4b8", fontSize:"9px", cursor:"pointer" }}>clear</button>
+                  </div>
+                ) : null}
+                <div style={{ display:"flex", flexWrap:"wrap", gap:"5px", marginTop:"7px" }}>
+                  {["Who needs follow-up?","Any overdue traps?","Most caught animal?","Customers with no email?"].map(q=>(
+                    <button key={q} onClick={()=>setAiQuery(q)} style={{ padding:"4px 8px", backgroundColor:"#8b5cf622", border:"1px solid #8b5cf644", borderRadius:"12px", color:"#c4b5fd", fontSize:"8px", cursor:"pointer" }}>{q}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "settings" && (
+          <div style={{ padding:"16px" }}>
+            <div style={{ marginBottom:"12px" }}>
+              <div style={{ fontSize:"10px", color:"#3a6a4a", letterSpacing:"2px" }}>SETTINGS</div>
+              <div style={{ fontSize:"20px", color:T.primary, fontWeight:"bold" }}>Guardian Systems LLC</div>
+              <div style={{ fontSize:"9px", color:"#3a6a4a" }}>TrapTrack v1.0.0</div>
+            </div>
+            <div style={{ backgroundColor:T.card, border:"1px solid "+T.border, borderRadius:"8px", padding:"14px", marginBottom:"14px" }}>
+              <div style={{ fontSize:"10px", color:T.primary, fontWeight:"bold", marginBottom:"8px" }}>COMPANY PROFILE</div>
+              {[["COMPANY","Guardian Systems LLC"],["OPERATOR","Guardian Trapper"],["LICENSE","GT-2025-001"],["TRAPS",traps.length+" in system"],["INSPECTIONS",inspections.length+" records"]].map(([l,v])=>(
+                <div key={l} style={{ marginBottom:"8px", borderBottom:"1px solid "+T.border, paddingBottom:"8px" }}>
+                  <div style={{ color:"#3a6a4a", fontSize:"8px" }}>{l}</div>
+                  <div style={{ color:T.text, fontSize:"11px" }}>{v}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ backgroundColor:T.card, border:"1px solid "+T.border, borderRadius:"8px", padding:"14px", marginBottom:"14px" }}>
+              <div style={{ fontSize:"10px", color:T.primary, fontWeight:"bold", marginBottom:"10px" }}>⚙️ PREFERENCES</div>
+              <div style={{ marginBottom:"12px" }}>
+                <div style={{ fontSize:"9px", color:"#a8d4b8", fontWeight:"bold", marginBottom:"6px" }}>✉️ DEFAULT EMAIL APP</div>
+                <div style={{ display:"flex", gap:"6px" }}>
+                  {[["gmail","Gmail","#EA4335"],["mail","Mail App",T.blue]].map(([val,lbl,col])=>(
+                    <button key={val} onClick={()=>setPrefs(p=>({...p,emailApp:val}))} style={{ flex:1, padding:"10px", borderRadius:"7px", border:"1px solid "+(prefs.emailApp===val?col:T.border), backgroundColor:prefs.emailApp===val?col+"22":T.deep, color:prefs.emailApp===val?col:T.text, fontSize:"11px", fontWeight:"bold", cursor:"pointer" }}>{lbl}</button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ marginBottom:"12px" }}>
+                <div style={{ fontSize:"9px", color:"#a8d4b8", fontWeight:"bold", marginBottom:"6px" }}>⏰ AUTO-REMINDER FREQUENCY</div>
+                <div style={{ display:"flex", gap:"6px" }}>
+                  {[[1,"Daily"],[3,"Every 3 Days"],[7,"Weekly"]].map(([val,lbl])=>(
+                    <button key={val} onClick={()=>setPrefs(p=>({...p,reminderDays:val}))} style={{ flex:1, padding:"8px 4px", borderRadius:"7px", border:"1px solid "+(prefs.reminderDays===val?T.primary:T.border), backgroundColor:prefs.reminderDays===val?T.primary+"22":T.deep, color:prefs.reminderDays===val?T.primary:T.text, fontSize:"9px", fontWeight:"bold", cursor:"pointer" }}>{lbl}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div style={{ backgroundColor:T.card, border:"1px solid "+T.border, borderRadius:"8px", padding:"14px", marginBottom:"14px" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"8px" }}>
+                <div style={{ fontSize:"10px", color:T.primary, fontWeight:"bold" }}>📧 AUTO-EMAIL (Resend)</div>
+                {prefs.resendKey ? <div style={{ fontSize:"8px", color:T.primary, padding:"2px 7px", border:"1px solid "+T.primary+"44", borderRadius:"10px" }}>✓ ON</div> : null}
+              </div>
+              <div style={{ fontSize:"8px", color:"#a8d4b8", marginBottom:"8px" }}>Free at resend.com — 3,000 emails/month, no IP restrictions.</div>
+              <div style={{ fontSize:"8px", color:"#a8d4b8", marginBottom:"3px", fontWeight:"bold" }}>RESEND API KEY</div>
+              <input type="text" style={{ width:"100%", padding:"9px 10px", backgroundColor:T.deep, border:"1px solid "+T.border, borderRadius:"6px", color:T.text, fontSize:"12px", fontFamily:"'Courier New',monospace", boxSizing:"border-box", display:"block", marginBottom:"8px" }} placeholder="re_xxxxxxxxxxxxxxxx" value={prefs.resendKey||""} onChange={e=>setPrefs(p=>({...p,resendKey:e.target.value.trim()}))} />
+              <div style={{ fontSize:"8px", color:"#a8d4b8", marginBottom:"3px", fontWeight:"bold" }}>FROM ADDRESS (optional)</div>
+              <input type="text" style={{ width:"100%", padding:"9px 10px", backgroundColor:T.deep, border:"1px solid "+T.border, borderRadius:"6px", color:T.text, fontSize:"12px", fontFamily:"'Courier New',monospace", boxSizing:"border-box", display:"block", marginBottom:"8px" }} placeholder="you@yourdomain.com" value={prefs.resendFrom||""} onChange={e=>setPrefs(p=>({...p,resendFrom:e.target.value.trim()}))} />
+              <div style={{ fontSize:"8px", color:"#a8d4b8", marginBottom:"3px", fontWeight:"bold" }}>MESSAGE TEMPLATE</div>
+              <textarea style={{ width:"100%", padding:"9px 10px", backgroundColor:T.deep, border:"1px solid "+T.border, borderRadius:"6px", color:T.text, fontSize:"10px", fontFamily:"'Courier New',monospace", boxSizing:"border-box", display:"block", minHeight:"70px", resize:"none", marginBottom:"8px" }} value={prefs.reminderTemplate||""} onChange={e=>setPrefs(p=>({...p,reminderTemplate:e.target.value}))} />
+              <div style={{ fontSize:"7px", color:"#3a6a4a", marginBottom:"8px" }}>Use curly braces with: name, trap, location</div>
+              {prefs.resendKey ? (
+                <button onClick={()=>{ const t=traps.filter(x=>x.customerEmail); if(!t.length){setAutoSendStatus({sent:[],failed:["No customer emails on file"]});return;} sendAutoReminders(t.slice(0,1)); }} style={{ width:"100%", padding:"10px", backgroundColor:T.primary+"22", border:"1px solid "+T.primary+"44", color:T.primary, borderRadius:"6px", cursor:"pointer", fontSize:"10px", fontWeight:"bold" }}>
+                  🧪 TEST — Send to First Customer
+                </button>
+              ) : null}
+            </div>
+            <div style={{ backgroundColor:T.card, border:"1px solid "+T.border, borderRadius:"8px", padding:"14px", marginBottom:"14px" }}>
+              <div style={{ fontSize:"10px", color:T.primary, fontWeight:"bold", marginBottom:"8px" }}>🤖 ANTHROPIC API KEY</div>
+              <div style={{ fontSize:"8px", color:"#a8d4b8", marginBottom:"6px" }}>Required for AI features. Get free at console.anthropic.com</div>
+              <input type="password" style={{ width:"100%", padding:"9px 10px", backgroundColor:T.deep, border:"1px solid "+T.border, borderRadius:"6px", color:T.text, fontSize:"12px", fontFamily:"'Courier New',monospace", boxSizing:"border-box", display:"block", marginBottom:"6px" }} placeholder="sk-ant-..." value={prefs.anthropicKey||""} onChange={e=>setPrefs(p=>({...p,anthropicKey:e.target.value.trim()}))} />
+              {prefs.anthropicKey ? <div style={{ fontSize:"8px", color:T.primary }}>✓ AI features enabled</div> : null}
+            </div>
+            <div style={{ backgroundColor:T.card, border:"1px solid "+T.border, borderRadius:"8px", padding:"14px", marginBottom:"14px" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"8px" }}>
+                <div style={{ fontSize:"10px", color:T.primary, fontWeight:"bold" }}>🗺️ GOOGLE MAPS API KEY</div>
+                {prefs.gmapsKey ? <div style={{ fontSize:"8px", color:"#4285F4", padding:"2px 7px", border:"1px solid #4285F444", borderRadius:"10px" }}>✓ Google Maps ON</div> : <div style={{ fontSize:"8px", color:"#3a6a4a" }}>Using OpenStreetMap</div>}
+              </div>
+              <div style={{ fontSize:"8px", color:"#a8d4b8", marginBottom:"6px", lineHeight:"14px" }}>
+                Optional — enables real Google Maps. Get free at console.cloud.google.com → Maps JavaScript API. Without it, OpenStreetMap is used (works great).
+              </div>
+              <input type="text" style={{ width:"100%", padding:"9px 10px", backgroundColor:T.deep, border:"1px solid "+T.border, borderRadius:"6px", color:T.text, fontSize:"12px", fontFamily:"'Courier New',monospace", boxSizing:"border-box", display:"block", marginBottom:"6px" }} placeholder="AIzaSy..." value={prefs.gmapsKey||""} onChange={e=>{ setPrefs(p=>({...p,gmapsKey:e.target.value.trim()})); if(leafletMap.current) { leafletMap.current=null; } }} />
+              {prefs.gmapsKey ? <div style={{ fontSize:"8px", color:"#4285F4" }}>✓ Will use Google Maps on next map view</div> : null}
+            </div>
+            <div style={{ backgroundColor:T.card, border:"1px solid "+T.border, borderRadius:"8px", padding:"14px", marginBottom:"14px" }}>
+              <div style={{ fontSize:"10px", color:T.primary, fontWeight:"bold", marginBottom:"8px" }}>💾 BACKUP &amp; RESTORE SETTINGS</div>
+              <div style={{ fontSize:"8px", color:"#a8d4b8", marginBottom:"10px", lineHeight:"14px" }}>Export your API keys to a file. Import them after updating the app — never retype your keys again.</div>
+              <div style={{ display:"flex", gap:"8px" }}>
+                <button onClick={()=>{
+                  const data = JSON.stringify({prefs, exportedAt: new Date().toISOString(), app:"TrapTrack"}, null, 2);
+                  const blob = new Blob([data], {type:"application/json"});
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url; a.download = "traptrack-settings.json"; a.click();
+                  URL.revokeObjectURL(url);
+                }} style={{ flex:1, padding:"11px", backgroundColor:T.primary+"22", border:"1px solid "+T.primary+"44", color:T.primary, borderRadius:"6px", cursor:"pointer", fontSize:"10px", fontWeight:"bold" }}>
+                  📤 Export Keys
+                </button>
+                <label style={{ flex:1, padding:"11px", backgroundColor:T.blue+"22", border:"1px solid "+T.blue+"44", color:T.blue, borderRadius:"6px", cursor:"pointer", fontSize:"10px", fontWeight:"bold", textAlign:"center", display:"block" }}>
+                  📥 Import Keys
+                  <input type="file" accept=".json" style={{ display:"none" }} onChange={e=>{
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = ev => {
+                      try {
+                        const data = JSON.parse(ev.target.result);
+                        if (data.prefs) {
+                          setPrefs(prev => ({...prev, ...data.prefs}));
+                          alert("Settings imported successfully!");
+                        } else if (data.anthropicKey || data.resendKey || data.gmapsKey) {
+                          setPrefs(prev => ({...prev, ...data}));
+                          alert("Settings imported successfully!");
+                        } else { alert("Invalid settings file."); }
+                      } catch(err) { alert("Could not read file: "+err.message); }
+                    };
+                    reader.readAsText(file);
+                    e.target.value = "";
+                  }} />
+                </label>
+              </div>
+            </div>
+            <button onClick={()=>setIsAuthenticated(false)} style={{ backgroundColor:T.red, color:T.bg, padding:"12px", border:"none", borderRadius:"6px", fontSize:"12px", fontWeight:"bold", width:"100%", cursor:"pointer" }}>DISCONNECT TERMINAL APP RUN</button>
+          </div>
+        )}
+
+      </div>
+
+      {statusPopupId && <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:400 }} onClick={()=>setStatusPopupId(null)} />}
+
+      {showTrapModal && (
+        <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, backgroundColor:"rgba(0,0,0,0.85)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600 }} onClick={()=>setShowTrapModal(false)}>
+          <div style={{ backgroundColor:T.card, border:"2px solid "+T.primary, borderRadius:"12px", padding:"20px", width:"90%", maxWidth:"440px", maxHeight:"92vh", overflowY:"auto" }} onClick={(e)=>e.stopPropagation()}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"14px" }}>
+              <div style={{ fontSize:"14px", color:T.primary, fontWeight:"bold" }}>{editId?"EDIT TRAP":"NEW TRAP"}</div>
+              <button onClick={()=>setShowTrapModal(false)} style={{ background:"none", border:"none", color:T.red, cursor:"pointer", fontSize:"22px", fontWeight:"bold" }}>✕</button>
+            </div>
+            {[["TRAP NAME","name","text","e.g. Back Porch Cage #1"],["PROPERTY ADDRESS","address","text","123 Main St, Springfield"],["EXACT TRAP LOCATION","trapLocation","text","e.g. NE corner garage, rear deck left"],["GENERAL AREA","location","text","North Field, South Creek, etc."]].map(([lbl,field,type,ph]) => (
+              <div key={field}>
+                <div style={{ color:"#3a6a4a", fontSize:"9px", fontWeight:"bold", marginBottom:"3px" }}>{lbl}</div>
+                <input type={type} style={{ ...IS, marginBottom:"10px" }} placeholder={ph} value={trapForm[field]||""} onChange={(e)=>setTrapForm((f)=>({...f,[field]:e.target.value}))} />
+              </div>
+            ))}
+            <div style={{ color:"#3a6a4a", fontSize:"9px", fontWeight:"bold", marginBottom:"3px" }}>TRAP TYPE</div>
+            <select style={{ ...IS, marginBottom:"10px" }} value={trapForm.type} onChange={(e)=>setTrapForm((f)=>({...f,type:e.target.value}))}>
+              <option value="snap-mouse">Snap Trap (Mouse)</option><option value="snap-rat">Snap Trap (Rat)</option>
+              <option value="cage-small">Small Cage Trap</option><option value="door-small">Small 1-Way Door</option>
+              <option value="cage-medium">Medium Cage Trap</option><option value="door-medium">Medium 1-Way Door</option>
+              <option value="cage-large">Large Cage Trap</option><option value="door-large">Large 1-Way Door</option>
+              <option value="cage-xl">XL Cage (Fox/Raccoon)</option><option value="snare">Snare</option><option value="foothold">Foothold</option><option value="cage">Cage (Generic)</option>
+            </select>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px", marginBottom:"10px" }}>
+              <div><div style={{ color:"#3a6a4a", fontSize:"9px", fontWeight:"bold", marginBottom:"3px" }}>DATE ADDED</div><input type="date" style={IS} value={trapForm.dateAdded} onChange={(e)=>setTrapForm((f)=>({...f,dateAdded:e.target.value}))} /></div>
+              <div><div style={{ color:"#3a6a4a", fontSize:"9px", fontWeight:"bold", marginBottom:"3px" }}>NEXT CHECK</div><input type="date" style={IS} value={trapForm.nextCheck||""} onChange={(e)=>setTrapForm((f)=>({...f,nextCheck:e.target.value}))} /></div>
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px", marginBottom:"10px" }}>
+              <div>
+                <div style={{ color:"#3a6a4a", fontSize:"9px", fontWeight:"bold", marginBottom:"3px" }}>LOCATION STATUS</div>
+                <select style={IS} value={trapForm.deployLocation} onChange={(e)=>setTrapForm((f)=>({...f,deployLocation:e.target.value}))}>
+                  <option value="truck">On Truck</option><option value="deployed">Deployed</option><option value="storage">Storage</option>
+                </select>
+              </div>
+              <div>
+                <div style={{ color:"#3a6a4a", fontSize:"9px", fontWeight:"bold", marginBottom:"3px" }}>STATUS</div>
+                <select style={IS} value={trapForm.status} onChange={(e)=>setTrapForm((f)=>({...f,status:e.target.value}))}>
+                  <option value="active">Active</option><option value="triggered">Triggered</option><option value="checked">Checked</option>
+                </select>
+              </div>
+            </div>
+            <div style={{ fontSize:"9px", color:T.blue, fontWeight:"bold", marginBottom:"8px", marginTop:"4px", borderTop:"1px solid "+T.border, paddingTop:"10px" }}>CUSTOMER CONTACT</div>
+            {[["CUSTOMER NAME","customerName","text","e.g. John Smith"],["PHONE","customerPhone","tel","555-555-5555"],["EMAIL","customerEmail","email","customer@email.com"]].map(([lbl,field,type,ph]) => (
+              <div key={field}>
+                <div style={{ color:"#3a6a4a", fontSize:"9px", fontWeight:"bold", marginBottom:"3px" }}>{lbl}</div>
+                <input type={type} style={{ ...IS, marginBottom:"10px" }} placeholder={ph} value={trapForm[field]||""} onChange={(e)=>setTrapForm((f)=>({...f,[field]:e.target.value}))} />
+              </div>
+            ))}
+            <div style={{ borderTop:"1px solid "+T.border, paddingTop:"10px", marginBottom:"8px" }}>
+              <div style={{ fontSize:"9px", color:T.blue, fontWeight:"bold", marginBottom:"8px" }}>ADDRESSES</div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px", marginBottom:"8px" }}>
+                <div>
+                  <div style={{ color:"#3a6a4a", fontSize:"9px", fontWeight:"bold", marginBottom:"3px" }}>SERVICE ADDRESS</div>
+                  <input type="text" style={IS} placeholder="Where trap is deployed" value={trapForm.address||""} onChange={e=>setTrapForm(f=>({...f,address:e.target.value}))} />
+                </div>
+                <div>
+                  <div style={{ color:"#3a6a4a", fontSize:"9px", fontWeight:"bold", marginBottom:"3px" }}>CUSTOMER ADDRESS</div>
+                  <input type="text" style={IS} placeholder="Billing / home address" value={trapForm.customerAddress||""} onChange={e=>setTrapForm(f=>({...f,customerAddress:e.target.value}))} />
+                </div>
+              </div>
+              <div style={{ marginBottom:"8px" }}>
+                <div style={{ color:"#3a6a4a", fontSize:"9px", fontWeight:"bold", marginBottom:"5px" }}>PROPERTY TYPE</div>
+                <div style={{ display:"flex", gap:"6px", flexWrap:"wrap" }}>
+                  {[["🏠","primary","Primary"],["🏘️","rental","Rental"],["🏢","commercial","Commercial"],["🏖️","vacation","Vacation"],["📍","other","Other"]].map(([icon,val,label]) => (
+                    <button key={val} onClick={()=>setTrapForm(f=>({...f,propertyType:val}))} style={{ padding:"6px 10px", borderRadius:"20px", border:"1px solid "+(trapForm.propertyType===val?T.primary:T.border), backgroundColor:trapForm.propertyType===val?T.primary+"22":T.deep, color:trapForm.propertyType===val?T.primary:T.text, fontSize:"9px", fontWeight:"bold", cursor:"pointer" }}>
+                      {icon} {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {(trapForm.propertyType==="rental"||trapForm.propertyType==="other") && (
+                <div style={{ backgroundColor:T.deep, border:"1px solid "+T.border, borderRadius:"8px", padding:"10px" }}>
+                  <div style={{ fontSize:"8px", color:T.amber, fontWeight:"bold", marginBottom:"6px" }}>🏘️ ADDITIONAL RENTAL PROPERTIES</div>
+                  {(trapForm.extraAddresses||[]).map((addr,i)=>(
+                    <div key={i} style={{ display:"flex", gap:"6px", marginBottom:"6px" }}>
+                      <input type="text" style={{ ...IS, flex:1, marginBottom:0 }} placeholder={"Rental #"+(i+2)} value={addr} onChange={e=>{const a=[...(trapForm.extraAddresses||[])];a[i]=e.target.value;setTrapForm(f=>({...f,extraAddresses:a}));}} />
+                      <button onClick={()=>{const a=[...(trapForm.extraAddresses||[])];a.splice(i,1);setTrapForm(f=>({...f,extraAddresses:a}));}} style={{ padding:"6px 10px", backgroundColor:T.red+"22", border:"1px solid "+T.red+"44", borderRadius:"6px", color:T.red, fontSize:"10px", cursor:"pointer", fontWeight:"bold", flexShrink:0 }}>✕</button>
+                    </div>
+                  ))}
+                  <button onClick={()=>setTrapForm(f=>({...f,extraAddresses:[...(f.extraAddresses||[]),""]})) } style={{ width:"100%", padding:"7px", backgroundColor:T.primary+"15", border:"1px dashed "+T.primary+"55", borderRadius:"6px", color:T.primary, fontSize:"9px", fontWeight:"bold", cursor:"pointer" }}>+ Add Rental Address</button>
+                </div>
+              )}
+            </div>
+            <div style={{ display:"flex", gap:"8px" }}>
+              <button onClick={()=>setShowTrapModal(false)} style={{ flex:1, padding:"11px", backgroundColor:T.border, color:T.text, border:"none", borderRadius:"6px", cursor:"pointer", fontWeight:"bold" }}>CANCEL</button>
+              <button onClick={saveTrap} style={{ flex:2, padding:"11px", backgroundColor:T.primary, color:T.bg, border:"none", borderRadius:"6px", cursor:"pointer", fontWeight:"bold" }}>SAVE TRAP</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showInspModal && (
+        <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, backgroundColor:"rgba(0,0,0,0.9)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:999 }} onClick={()=>setShowInspModal(false)}>
+          <div style={{ backgroundColor:T.card, border:"2px solid "+T.primary, borderRadius:"12px", padding:"20px", width:"90%", maxWidth:"500px", maxHeight:"90vh", overflowY:"auto" }} onClick={(e)=>e.stopPropagation()}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"14px" }}>
+              <div style={{ fontSize:"15px", color:T.primary, fontWeight:"bold" }}>NEW INSPECTION</div>
+              <button onClick={()=>setShowInspModal(false)} style={{ background:"none", border:"none", color:T.red, cursor:"pointer", fontSize:"22px", fontWeight:"bold" }}>✕</button>
+            </div>
+            <div style={{ fontSize:"9px", color:"#3a6a4a", marginBottom:"10px", padding:"6px", backgroundColor:T.deep, borderRadius:"4px" }}>Will appear on calendar for today: {today}</div>
+            {[["LOCATION *","location","Location or area..."],["CLIENT / ADDRESS","client","Client name or property address"]].map(([lbl,field,ph]) => (
+              <div key={field}>
+                <div style={{ color:T.primary, fontSize:"9px", fontWeight:"bold", marginBottom:"3px" }}>{lbl}</div>
+                <input style={{ ...IS, marginBottom:"10px" }} placeholder={ph} value={inspForm[field]} onChange={(e)=>setInspForm((f)=>({...f,[field]:e.target.value}))} />
+              </div>
+            ))}
+            <div style={{ color:T.primary, fontSize:"9px", fontWeight:"bold", marginBottom:"3px" }}>SEVERITY</div>
+            <select style={{ ...IS, marginBottom:"10px" }} value={inspForm.severity} onChange={(e)=>setInspForm((f)=>({...f,severity:e.target.value}))}>
+              <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
+            </select>
+            <div style={{ color:T.primary, fontSize:"9px", fontWeight:"bold", marginBottom:"3px" }}>NOTES</div>
+            <textarea style={{ ...IS, minHeight:"70px", resize:"none", marginBottom:"10px" }} placeholder="What did you observe?" value={inspForm.notes} onChange={(e)=>setInspForm((f)=>({...f,notes:e.target.value}))} />
+            <div style={{ color:T.primary, fontSize:"9px", fontWeight:"bold", marginBottom:"3px" }}>ENTRY POINTS (comma separated)</div>
+            <textarea style={{ ...IS, minHeight:"50px", resize:"none", marginBottom:"10px" }} placeholder="Foundation crack 2in, Soffit gap north..." value={inspForm.entryPoints} onChange={(e)=>setInspForm((f)=>({...f,entryPoints:e.target.value}))} />
+            <div style={{ color:T.primary, fontSize:"9px", fontWeight:"bold", marginBottom:"3px" }}>FOLLOW-UP DATE</div>
+            <input type="date" style={{ ...IS, marginBottom:"14px" }} value={inspForm.followUpDate} onChange={(e)=>setInspForm((f)=>({...f,followUpDate:e.target.value}))} />
+            <div style={{ display:"flex", gap:"8px" }}>
+              <button onClick={()=>setShowInspModal(false)} style={{ flex:1, padding:"12px", backgroundColor:T.deep, border:"1px solid "+T.border, color:T.text, borderRadius:"6px", cursor:"pointer", fontWeight:"bold" }}>CANCEL</button>
+              <button onClick={saveInsp} style={{ flex:2, padding:"12px", backgroundColor:inspForm.location.trim()?T.primary:"#1a3a2a", border:"none", color:inspForm.location.trim()?T.bg:"#3a6a4a", borderRadius:"6px", cursor:inspForm.location.trim()?"pointer":"not-allowed", fontWeight:"bold" }}>SAVE INSPECTION</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {notesId && (
+        <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, backgroundColor:"rgba(0,0,0,0.8)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1001 }} onClick={()=>setNotesId(null)}>
+          <div style={{ backgroundColor:T.card, border:"2px solid "+T.blue, borderRadius:"12px", padding:"20px", width:"90%", maxWidth:"400px" }} onClick={(e)=>e.stopPropagation()}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"12px" }}>
+              <div style={{ fontSize:"13px", color:T.blue, fontWeight:"bold" }}>EDIT NOTES</div>
+              <button onClick={()=>setNotesId(null)} style={{ background:"none", border:"none", color:T.red, cursor:"pointer", fontSize:"20px", fontWeight:"bold" }}>✕</button>
+            </div>
+            <textarea autoFocus value={notesText} onChange={(e)=>setNotesText(e.target.value)} style={{ ...IS, minHeight:"140px", resize:"none", borderColor:T.blue, marginBottom:"14px" }} />
+            <div style={{ display:"flex", gap:"8px" }}>
+              <button onClick={()=>setNotesId(null)} style={{ flex:1, padding:"10px", backgroundColor:T.deep, border:"1px solid "+T.border, color:T.text, borderRadius:"6px", cursor:"pointer", fontWeight:"bold" }}>CANCEL</button>
+              <button onClick={()=>{setInspections((p)=>p.map((i)=>i.id===notesId?{...i,notes:notesText}:i));setNotesId(null);}} style={{ flex:1, padding:"10px", backgroundColor:T.primary, border:"none", color:T.bg, borderRadius:"6px", cursor:"pointer", fontWeight:"bold" }}>SAVE</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {entryId && (
+        <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, backgroundColor:"rgba(0,0,0,0.8)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1001 }} onClick={()=>setEntryId(null)}>
+          <div style={{ backgroundColor:T.card, border:"2px solid "+T.blue, borderRadius:"12px", padding:"20px", width:"90%", maxWidth:"400px" }} onClick={(e)=>e.stopPropagation()}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"10px" }}>
+              <div style={{ fontSize:"13px", color:T.blue, fontWeight:"bold" }}>EDIT ENTRY POINTS</div>
+              <button onClick={()=>setEntryId(null)} style={{ background:"none", border:"none", color:T.red, cursor:"pointer", fontSize:"20px", fontWeight:"bold" }}>✕</button>
+            </div>
+            <div style={{ fontSize:"9px", color:"#3a6a4a", marginBottom:"8px" }}>Separate each point with a comma</div>
+            <textarea autoFocus value={entryText} onChange={(e)=>setEntryText(e.target.value)} style={{ ...IS, minHeight:"120px", resize:"none", borderColor:T.blue, marginBottom:"14px" }} />
+            <div style={{ display:"flex", gap:"8px" }}>
+              <button onClick={()=>setEntryId(null)} style={{ flex:1, padding:"10px", backgroundColor:T.deep, border:"1px solid "+T.border, color:T.text, borderRadius:"6px", cursor:"pointer", fontWeight:"bold" }}>CANCEL</button>
+              <button onClick={()=>{const arr=entryText.split(",").map((p)=>p.trim()).filter(Boolean);setInspections((p)=>p.map((i)=>i.id===entryId?{...i,entryPoints:arr}:i));setEntryId(null);}} style={{ flex:1, padding:"10px", backgroundColor:T.primary, border:"none", color:T.bg, borderRadius:"6px", cursor:"pointer", fontWeight:"bold" }}>SAVE</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editInspId && (
+        <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, backgroundColor:"rgba(0,0,0,0.9)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:999 }} onClick={()=>setEditInspId(null)}>
+          <div style={{ backgroundColor:T.card, border:"2px solid "+T.primary, borderRadius:"12px", padding:"20px", width:"90%", maxWidth:"500px", maxHeight:"90vh", overflowY:"auto" }} onClick={(e)=>e.stopPropagation()}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"14px" }}>
+              <div style={{ fontSize:"14px", color:T.text, fontWeight:"bold" }}>EDIT INSPECTION</div>
+              <button onClick={()=>setEditInspId(null)} style={{ background:"none", border:"none", color:T.red, cursor:"pointer", fontSize:"22px", fontWeight:"bold" }}>✕</button>
+            </div>
+            <div style={{ color:T.primary, fontSize:"9px", fontWeight:"bold", marginBottom:"3px" }}>NOTES</div>
+            <textarea style={{ ...IS, minHeight:"100px", resize:"none", marginBottom:"10px" }} value={editInspData?.notes||""} onChange={(e)=>setEditInspData((d)=>({...d,notes:e.target.value}))} />
+            <div style={{ color:T.primary, fontSize:"9px", fontWeight:"bold", marginBottom:"3px" }}>ENTRY POINTS</div>
+            <textarea style={{ ...IS, minHeight:"80px", resize:"none", marginBottom:"10px" }} value={editInspData?.entryPoints||""} onChange={(e)=>setEditInspData((d)=>({...d,entryPoints:e.target.value}))} />
+            <div style={{ color:T.primary, fontSize:"9px", fontWeight:"bold", marginBottom:"3px" }}>FOLLOW-UP DATE</div>
+            <input type="date" style={{ ...IS, marginBottom:"14px" }} value={editInspData?.followUpDate||""} onChange={(e)=>setEditInspData((d)=>({...d,followUpDate:e.target.value}))} />
+            <div style={{ display:"flex", gap:"8px" }}>
+              <button onClick={()=>setEditInspId(null)} style={{ flex:1, padding:"12px", backgroundColor:T.deep, border:"1px solid "+T.border, color:T.text, borderRadius:"6px", cursor:"pointer", fontWeight:"bold" }}>CANCEL</button>
+              <button onClick={()=>{if(editInspData){const arr=(editInspData.entryPoints||"").split(",").map((p)=>p.trim()).filter(Boolean);setInspections((p)=>p.map((i)=>i.id===editInspId?{...i,notes:editInspData.notes,entryPoints:arr,followUpDate:editInspData.followUpDate||null}:i));setEditInspId(null);setEditInspData(null);}}} style={{ flex:1, padding:"12px", backgroundColor:T.primary, border:"none", color:T.bg, borderRadius:"6px", cursor:"pointer", fontWeight:"bold" }}>SAVE</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {fupPopup && (
+        <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, backgroundColor:"rgba(0,0,0,0.88)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:900 }} onClick={()=>setFupPopup(null)}>
+          <div style={{ backgroundColor:T.card, border:"2px solid "+(fupPopup.type==="trap"?T.amber:T.blue), borderRadius:"14px", padding:"20px", width:"90%", maxWidth:"440px", maxHeight:"88vh", overflowY:"auto" }} onClick={(e)=>e.stopPropagation()}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:"14px" }}>
+              <div style={{ fontSize:"15px", color:fupPopup.type==="trap"?T.amber:T.blue, fontWeight:"bold" }}>{fupPopup.type==="trap"?"TRAP SERVICE CALL":"INSPECTION FOLLOW-UP"}</div>
+              <button onClick={()=>setFupPopup(null)} style={{ background:"none", border:"none", color:T.red, cursor:"pointer", fontSize:"22px", fontWeight:"bold" }}>✕</button>
+            </div>
+            {fupPopup.type==="trap" ? (
+              <>
+                <div style={{ backgroundColor:T.deep, borderRadius:"8px", padding:"12px", marginBottom:"12px" }}>
+                  <div style={{ fontSize:"14px", color:T.text, fontWeight:"bold", marginBottom:"8px" }}>{fupPopup.item.name}</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"6px", fontSize:"9px" }}>
+                    {[["TYPE",TRAP_LBL[fupPopup.item.type]||fupPopup.item.type],["STATUS",fupPopup.item.status.toUpperCase()],["LOCATION",fupPopup.item.location],["TRAP SPOT",fupPopup.item.trapLocation||"—"],["ADDRESS",fupPopup.item.address||"—"],["NEXT CHECK",fupPopup.item.nextCheck||"—"]].map(([l,v]) => (
+                      <div key={l} style={{ backgroundColor:T.card, padding:"7px", borderRadius:"5px" }}>
+                        <div style={{ color:"#3a6a4a", fontSize:"7px" }}>{l}</div>
+                        <div style={{ color:T.text, fontSize:"10px", fontWeight:"bold", marginTop:"2px" }}>{v}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {fupPopup.item.customerName && (
+                    <div style={{ marginTop:"8px", padding:"8px", backgroundColor:T.blue+"15", borderRadius:"6px", border:"1px solid "+T.blue+"33" }}>
+                      <div style={{ fontSize:"8px", color:T.blue, fontWeight:"bold", marginBottom:"4px" }}>CUSTOMER</div>
+                      <div style={{ fontSize:"12px", color:T.text, fontWeight:"bold" }}>{fupPopup.item.customerName}</div>
+                      {fupPopup.item.customerPhone && <div style={{ fontSize:"10px", color:T.blue }}>📞 {fupPopup.item.customerPhone}</div>}
+                      {fupPopup.item.customerEmail && <div style={{ fontSize:"9px", color:"#3a6a4a" }}>✉ {fupPopup.item.customerEmail}</div>}
+                    </div>
+                  )}
+                  {fupPopup.item.nextCheck && <div style={{ marginTop:"8px", padding:"6px", backgroundColor:urgC(fupPopup.item.nextCheck)+"20", borderRadius:"5px", textAlign:"center", fontSize:"10px", color:urgC(fupPopup.item.nextCheck), fontWeight:"bold" }}>DUE: {fupPopup.item.nextCheck} — {daysUntil(fupPopup.item.nextCheck)}</div>}
+                </div>
+                <div style={{ fontSize:"10px", color:T.primary, fontWeight:"bold", marginBottom:"8px" }}>LOG SERVICE VISIT</div>
+                <div style={{ color:"#3a6a4a", fontSize:"9px", fontWeight:"bold", marginBottom:"3px" }}>UPDATE STATUS</div>
+                <select style={{ ...IS, marginBottom:"8px" }} value={fupForm.status} onChange={(e)=>setFupForm((f)=>({...f,status:e.target.value}))}>
+                  <option value="active">Active - reset and re-armed</option>
+                  <option value="triggered">Triggered - animal caught</option>
+                  <option value="checked">Checked - inspected, no catch</option>
+                  <option value="reset">Reset - bait replaced</option>
+                </select>
+                <div style={{ color:"#3a6a4a", fontSize:"9px", fontWeight:"bold", marginBottom:"3px" }}>NEXT CHECK DATE</div>
+                <input type="date" style={{ ...IS, marginBottom:"8px" }} value={fupForm.nextCheck} onChange={(e)=>setFupForm((f)=>({...f,nextCheck:e.target.value}))} />
+                <div style={{ color:"#3a6a4a", fontSize:"9px", fontWeight:"bold", marginBottom:"3px" }}>NOTES</div>
+                <textarea style={{ ...IS, minHeight:"60px", resize:"none", marginBottom:"12px" }} placeholder="What did you find? Actions taken..." value={fupForm.notes} onChange={(e)=>setFupForm((f)=>({...f,notes:e.target.value}))} />
+                <div style={{ display:"flex", gap:"8px" }}>
+                  <button onClick={()=>setFupPopup(null)} style={{ flex:1, padding:"11px", backgroundColor:T.deep, border:"1px solid "+T.border, color:T.text, borderRadius:"6px", cursor:"pointer", fontWeight:"bold" }}>CANCEL</button>
+                  <button onClick={()=>{
+                    const newCheck = fupForm.nextCheck || addDays(7);
+                    setTraps((p)=>p.map((t)=>t.id===fupPopup.item.id?{...t,status:fupForm.status,lastChecked:today,nextCheck:newCheck}:t));
+                    setInspections((p)=>[...p,{
+                      id:Date.now(),
+                      date:today,
+                      location:fupPopup.item.location+" — "+fupPopup.item.name,
+                      client:fupPopup.item.customerName||"",
+                      notes:fupForm.notes.trim()||"Service visit completed. "+( TRAP_LBL[fupPopup.item.type]||fupPopup.item.type)+" checked. Status: "+fupForm.status+".",
+                      entryPoints:[],
+                      severity:"low",
+                      followUpDate:newCheck,
+                      aiAnalysis:null
+                    }]);
+                    const isFuture = newCheck && Math.ceil((new Date(newCheck)-new Date(today))/86400000)>0;
+                    const tItem = fupPopup.item;
+                    setFupPopup(null);
+                    setFupForm({status:"checked",notes:"",nextCheck:addDays(7)});
+                    if (isFuture && (tItem.customerPhone||tItem.customerEmail)) {
+                      const ph=(tItem.customerPhone||"").replace(/[^\d+]/g,"");
+                      const em=tItem.customerEmail||"";
+                      const smsBody=encodeURIComponent("Hi "+(tItem.customerName||"there")+" - your Guardian Systems follow-up is scheduled for "+newCheck+". Trap: "+tItem.name+(tItem.address?" at "+tItem.address:"")+". Questions? Reply anytime.");
+                      const subj=encodeURIComponent("Guardian Systems - Appointment "+newCheck);
+                      const emailBody=encodeURIComponent("Hi "+(tItem.customerName||"there")+",\n\nYour Guardian Systems follow-up appointment is confirmed for "+newCheck+".\n\nTrap: "+tItem.name+(tItem.address?"\nAddress: "+tItem.address:"")+".\n\nThank you,\nGuardian Systems LLC");
+                      setSendConfirmPopup({customerName:tItem.customerName,date:newCheck,phone:ph,email:em,smsBody,subj,emailBody});
+                    }
+                  }} style={{ flex:2, padding:"11px", backgroundColor:T.primary, border:"none", color:T.bg, borderRadius:"6px", cursor:"pointer", fontWeight:"bold" }}>LOG SERVICE CALL</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ backgroundColor:T.deep, borderRadius:"8px", padding:"12px", marginBottom:"12px" }}>
+                  <div style={{ fontSize:"14px", color:T.text, fontWeight:"bold", marginBottom:"6px" }}>{fupPopup.item.location}</div>
+                  {fupPopup.item.client && <div style={{ fontSize:"11px", color:T.blue, marginBottom:"6px" }}>{fupPopup.item.client}</div>}
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"6px", fontSize:"9px", marginBottom:"6px" }}>
+                    {[["ORIGINAL DATE",fupPopup.item.date],["SEVERITY",fupPopup.item.severity.toUpperCase()],["FOLLOW-UP DUE",fupPopup.item.followUpDate],["URGENCY",daysUntil(fupPopup.item.followUpDate)]].map(([l,v]) => (
+                      <div key={l} style={{ backgroundColor:T.card, padding:"7px", borderRadius:"5px" }}>
+                        <div style={{ color:"#3a6a4a", fontSize:"7px" }}>{l}</div>
+                        <div style={{ color:l==="URGENCY"?urgC(fupPopup.item.followUpDate):T.text, fontSize:"10px", fontWeight:"bold", marginTop:"2px" }}>{v}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {fupPopup.item.notes && <div style={{ backgroundColor:T.card, padding:"8px", borderRadius:"5px", fontSize:"9px", color:T.text }}>{fupPopup.item.notes}</div>}
+                </div>
+                <div style={{ display:"flex", gap:"8px" }}>
+                  <button onClick={()=>setFupPopup(null)} style={{ flex:1, padding:"11px", backgroundColor:T.deep, border:"1px solid "+T.border, color:T.text, borderRadius:"6px", cursor:"pointer", fontWeight:"bold" }}>CLOSE</button>
+                  <button onClick={()=>{setFupPopup(null);setInspForm({location:fupPopup.item.location,client:fupPopup.item.client||"",notes:"",entryPoints:"",severity:fupPopup.item.severity,followUpDate:""});setShowInspModal(true);}} style={{ flex:2, padding:"11px", backgroundColor:T.blue, border:"none", color:T.bg, borderRadius:"6px", cursor:"pointer", fontWeight:"bold" }}>+ LOG FOLLOW-UP VISIT</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {custModal && (()=>{
+        const trap = traps.find((t) => t.id === custModal);
+        if (!trap) return null;
+        const isEditing = custEdit !== null;
+        const saveCustomer = () => {
+          const phone = custEdit.customerPhone ? custEdit.customerPhone.trim() : null;
+          setTraps((p) => p.map((t) => {
+            if (t.id === trap.id) return { ...t, ...custEdit };
+            if (phone && t.customerPhone && t.customerPhone.trim() === phone) return { ...t, ...custEdit };
+            return t;
+          }));
+          setCustEdit(null);
+        };
+        return (
+          <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, backgroundColor:"rgba(0,0,0,0.88)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:900 }} onClick={()=>{ setCustModal(null); setCustEdit(null); }}>
+            <div style={{ backgroundColor:T.card, border:"2px solid "+T.blue, borderRadius:"14px", padding:"20px", width:"92%", maxWidth:"400px", maxHeight:"88vh", overflowY:"auto" }} onClick={(e)=>e.stopPropagation()}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"14px" }}>
+                <div>
+                  <div style={{ fontSize:"14px", color:T.blue, fontWeight:"bold" }}>👤 CUSTOMER</div>
+                  {isEditing && <div style={{ fontSize:"9px", color:T.amber }}>Editing — changes sync to all traps with same phone</div>}
+                </div>
+                <button onClick={()=>{ setCustModal(null); setCustEdit(null); }} style={{ background:"none", border:"none", color:T.red, cursor:"pointer", fontSize:"22px", fontWeight:"bold" }}>✕</button>
+              </div>
+              {isEditing ? (
+                <div>
+                  {[["CUSTOMER NAME","customerName","text","Full name"],["PHONE","customerPhone","tel","555-555-5555"],["EMAIL","customerEmail","email","email@example.com"],["CUSTOMER ADDRESS","customerAddress","text","Home or billing address"]].map(([lbl,field,type,ph]) => (
+                    <div key={field} style={{ marginBottom:"10px" }}>
+                      <div style={{ color:T.blue, fontSize:"9px", fontWeight:"bold", marginBottom:"3px" }}>{lbl}</div>
+                      <input type={type} style={{ ...IS, borderColor:T.blue+"66" }} placeholder={ph} value={custEdit[field]||""} onChange={(e)=>setCustEdit((f)=>({...f,[field]:e.target.value}))} />
+                    </div>
+                  ))}
+                  <div style={{ backgroundColor:T.deep, borderRadius:"8px", padding:"10px", marginBottom:"12px" }}>
+                    <div style={{ fontSize:"8px", color:"#3a6a4a", marginBottom:"4px" }}>TRAP DETAILS (read-only)</div>
+                    <div style={{ fontSize:"10px", color:T.text }}>{trap.name} · {TRAP_LBL[trap.type]||trap.type}</div>
+                    <div style={{ fontSize:"9px", color:"#3a6a4a" }}>{trap.location}{trap.trapLocation?" — "+trap.trapLocation:""}</div>
+                    {trap.address && <div style={{ fontSize:"9px", color:"#3a6a4a" }}>🏠 {trap.address}</div>}
+                  </div>
+                  <div style={{ display:"flex", gap:"8px" }}>
+                    <button onClick={()=>setCustEdit(null)} style={{ flex:1, padding:"11px", backgroundColor:T.deep, border:"1px solid "+T.border, color:T.text, borderRadius:"6px", cursor:"pointer", fontWeight:"bold" }}>CANCEL</button>
+                    <button onClick={saveCustomer} style={{ flex:2, padding:"11px", backgroundColor:T.blue, border:"none", color:T.bg, borderRadius:"6px", cursor:"pointer", fontWeight:"bold", fontSize:"12px" }}>SAVE CHANGES</button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ backgroundColor:T.deep, borderRadius:"8px", padding:"14px", marginBottom:"12px" }}>
+                    <div style={{ fontSize:"20px", color:T.text, fontWeight:"bold", marginBottom:"12px" }}>{trap.customerName||"No name set"}</div>
+                    {[["📞 PHONE",trap.customerPhone],["✉️ EMAIL",trap.customerEmail],["🏠 CUSTOMER ADDRESS",trap.customerAddress],["📍 SERVICE ADDRESS",trap.address],["🎯 TRAP LOCATION",trap.location+(trap.trapLocation?" — "+trap.trapLocation:"")],["🪤 TRAP",trap.name+" ("+(TRAP_LBL[trap.type]||trap.type)+")"],["🏡 PROPERTY TYPE",trap.propertyType?{primary:"Primary Residence",rental:"Rental Property",commercial:"Commercial",vacation:"Vacation Home",other:"Other"}[trap.propertyType]||trap.propertyType:null]].map(([l,v])=>v?(
+                      <div key={l} style={{ marginBottom:"10px", borderBottom:"1px solid "+T.border, paddingBottom:"10px" }}>
+                        <div style={{ fontSize:"8px", color:"#3a6a4a", fontWeight:"bold" }}>{l}</div>
+                        <div style={{ fontSize:"13px", color:T.text, marginTop:"3px" }}>{v}</div>
+                      </div>
+                    ):null)}
+                  </div>
+                  <button onClick={()=>setCustEdit({ customerName:trap.customerName||"", customerPhone:trap.customerPhone||"", customerEmail:trap.customerEmail||"", customerAddress:trap.customerAddress||"" })} style={{ width:"100%", padding:"12px", backgroundColor:T.blue, color:T.bg, border:"none", borderRadius:"8px", cursor:"pointer", fontSize:"12px", fontWeight:"bold" }}>✏️ EDIT CUSTOMER INFO</button>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {fpModal && (()=>{
+        const animal = ANIMALS.find((a) => a.name === fpModal);
+        if (!animal) return null;
+        const fp = fpCache[fpModal] || {};
+        return (
+          <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, backgroundColor:"rgba(0,0,0,0.92)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000 }} onClick={()=>setFpModal(null)}>
+            <div style={{ backgroundColor:T.card, border:"2px solid "+T.primary, borderRadius:"14px", padding:"24px", width:"90%", maxWidth:"400px", maxHeight:"88vh", overflowY:"auto" }} onClick={(e)=>e.stopPropagation()}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"14px" }}>
+                <div>
+                  <div style={{ fontSize:"14px", color:T.primary, fontWeight:"bold" }}>{animal.name} Tracks</div>
+                  <div style={{ fontSize:"9px", color:"#3a6a4a" }}>Real photo via AI search</div>
+                </div>
+                <button onClick={()=>setFpModal(null)} style={{ background:"none", border:"none", color:T.red, cursor:"pointer", fontSize:"22px", fontWeight:"bold" }}>✕</button>
+              </div>
+              {fp.status === "ok" && fp.imageUrl ? (
+                <div style={{ marginBottom:"12px" }}>
+                  <img src={fp.imageUrl} alt={fp.altText || animal.name+" tracks"} style={{ width:"100%", borderRadius:"10px", border:"1px solid "+T.border, display:"block", maxHeight:"260px", objectFit:"cover" }} onError={(e) => { e.target.style.display = "none"; setFpCache((c) => ({ ...c, [fpModal]: { ...c[fpModal], imageUrl: null } })); }} />
+                  {fp.source && <div style={{ fontSize:"8px", color:"#3a6a4a", marginTop:"4px", textAlign:"right" }}>Source: {fp.source}</div>}
+                </div>
+              ) : fp.status === "loading" ? (
+                <div style={{ backgroundColor:T.deep, borderRadius:"10px", padding:"40px", textAlign:"center", marginBottom:"12px", border:"1px solid "+T.border }}>
+                  <div style={{ fontSize:"24px", marginBottom:"10px" }}>🔍</div>
+                  <div style={{ color:T.primary, fontSize:"11px", fontWeight:"bold" }}>Searching for real track photos...</div>
+                  <div style={{ color:"#3a6a4a", fontSize:"9px", marginTop:"4px" }}>Powered by AI web search</div>
+                </div>
+              ) : fp.status === "error" ? (
+                <div style={{ backgroundColor:T.deep, borderRadius:"10px", padding:"20px", textAlign:"center", marginBottom:"12px", border:"1px solid "+T.red+"44" }}>
+                  <div style={{ fontSize:"20px", marginBottom:"8px" }}>⚠️</div>
+                  <div style={{ color:T.red, fontSize:"10px", fontWeight:"bold", marginBottom:"8px" }}>Search failed</div>
+                  <button onClick={()=>fetchFootprint(fpModal)} style={{ backgroundColor:T.primary, color:T.bg, border:"none", borderRadius:"6px", padding:"8px 14px", cursor:"pointer", fontSize:"10px", fontWeight:"bold" }}>RETRY</button>
+                </div>
+              ) : (
+                <div style={{ backgroundColor:T.deep, borderRadius:"10px", padding:"32px", textAlign:"center", marginBottom:"12px", border:"1px solid "+T.border }}>
+                  <div style={{ fontSize:"20px", marginBottom:"10px" }}>📷</div>
+                  <div style={{ color:T.text, fontSize:"11px", fontWeight:"bold", marginBottom:"12px" }}>Tap to load real {animal.name} track photos</div>
+                  <button onClick={() => fetchFootprint(fpModal)} style={{ backgroundColor:T.primary, color:T.bg, border:"none", borderRadius:"8px", padding:"10px 20px", cursor:"pointer", fontSize:"12px", fontWeight:"bold" }}>🔍 SEARCH TRACKS</button>
+                </div>
+              )}
+              {fp.status === "ok" && fp.idTips && (
+                <div style={{ backgroundColor:T.primary+"18", border:"1px solid "+T.primary+"44", borderRadius:"8px", padding:"12px", marginBottom:"10px" }}>
+                  <div style={{ color:T.primary, fontWeight:"bold", fontSize:"9px", marginBottom:"6px" }}>AI IDENTIFICATION TIPS</div>
+                  <div style={{ color:T.text, fontSize:"10px", lineHeight:"16px" }}>{fp.idTips}</div>
+                </div>
+              )}
+              <div style={{ backgroundColor:T.deep, borderRadius:"8px", padding:"12px" }}>
+                <div style={{ color:T.primary, fontWeight:"bold", fontSize:"9px", marginBottom:"6px" }}>FIELD NOTES — {animal.name.toUpperCase()}</div>
+                <div style={{ color:T.text, fontSize:"10px", lineHeight:"16px" }}>{animal.tracks}</div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {youngModal && (()=>{
+        const animal=ANIMALS.find((a)=>a.name===youngModal);
+        if (!animal) return null;
+        return (
+          <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, backgroundColor:"rgba(0,0,0,0.9)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000 }} onClick={()=>setYoungModal(null)}>
+            <div style={{ backgroundColor:T.card, border:"2px solid "+T.amber, borderRadius:"14px", padding:"24px", width:"90%", maxWidth:"400px", maxHeight:"88vh", overflowY:"auto" }} onClick={(e)=>e.stopPropagation()}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:"14px" }}>
+                <div style={{ fontSize:"14px", color:T.amber, fontWeight:"bold" }}>Young {animal.name} ID</div>
+                <button onClick={()=>setYoungModal(null)} style={{ background:"none", border:"none", color:T.red, cursor:"pointer", fontSize:"22px", fontWeight:"bold" }}>✕</button>
+              </div>
+              <div style={{ backgroundColor:T.deep, borderRadius:"10px", padding:"16px", marginBottom:"12px", textAlign:"center" }}>
+                <div style={{ fontSize:"56px", marginBottom:"8px" }}>{animal.youngImg}</div>
+                <div style={{ fontSize:"13px", color:T.text, fontWeight:"bold" }}>Young {animal.name}</div>
+                <div style={{ fontSize:"10px", color:"#3a6a4a", marginTop:"4px" }}>{animal.youngSize}</div>
+              </div>
+              <div style={{ backgroundColor:T.deep, borderRadius:"8px", padding:"12px", marginBottom:"10px" }}>
+                <div style={{ fontSize:"9px", color:T.primary, fontWeight:"bold", marginBottom:"8px" }}>DEVELOPMENT TIMELINE</div>
+                {[["Eyes Open",animal.youngEyes],["Becomes Mobile",animal.youngMobile],["Independent",animal.youngIndep]].map(([l,v]) => (
+                  <div key={l} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"6px", padding:"6px", backgroundColor:T.card, borderRadius:"5px" }}>
+                    <span style={{ fontSize:"9px", color:"#3a6a4a" }}>{l}</span>
+                    <span style={{ fontSize:"10px", color:T.primary, fontWeight:"bold" }}>{v}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ backgroundColor:T.deep, borderRadius:"8px", padding:"12px", marginBottom:"10px" }}>
+                <div style={{ fontSize:"9px", color:T.amber, fontWeight:"bold", marginBottom:"8px" }}>IDENTIFYING FEATURES</div>
+                {animal.youngFeatures.map((f,i) => <div key={i} style={{ fontSize:"10px", color:T.text, marginBottom:"5px", paddingLeft:"8px", borderLeft:"2px solid "+T.amber+"55" }}>• {f}</div>)}
+              </div>
+              <div style={{ backgroundColor:T.red+"15", border:"1px solid "+T.red+"44", borderRadius:"8px", padding:"10px" }}>
+                <div style={{ fontSize:"9px", color:T.red, fontWeight:"bold", marginBottom:"4px" }}>HANDLING RISKS</div>
+                <div style={{ fontSize:"10px", color:T.text }}>{animal.youngRisks}</div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {infoPopup && (()=>{
+        const animal=ANIMALS.find((a)=>a.name===infoPopup.name);
+        if (!animal) return null;
+        return (
+          <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, backgroundColor:"rgba(0,0,0,0.85)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000 }} onClick={()=>setInfoPopup(null)}>
+            <div style={{ backgroundColor:T.card, border:"2px solid "+T.primary, borderRadius:"14px", padding:"20px", width:"88%", maxWidth:"360px" }} onClick={(e)=>e.stopPropagation()}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"14px" }}>
+                <div style={{ fontSize:"13px", color:T.primary, fontWeight:"bold" }}>{animal.icon} {infoPopup.field}</div>
+                <button onClick={()=>setInfoPopup(null)} style={{ background:"none", border:"none", color:T.red, cursor:"pointer", fontSize:"22px", fontWeight:"bold" }}>✕</button>
+              </div>
+              <div style={{ backgroundColor:T.deep, borderRadius:"10px", padding:"16px", marginBottom:"14px" }}>
+                <div style={{ fontSize:"9px", color:"#3a6a4a", marginBottom:"8px" }}>{animal.name}</div>
+                <div style={{ fontSize:"14px", color:T.text, lineHeight:"22px" }}>{infoPopup.value}</div>
+              </div>
+              <button onClick={()=>setInfoPopup(null)} style={{ width:"100%", padding:"12px", backgroundColor:T.primary, border:"none", color:T.bg, borderRadius:"8px", cursor:"pointer", fontSize:"12px", fontWeight:"bold" }}>CLOSE</button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {selDate && (()=>{
+        const ds=selDate.toISOString().split("T")[0];
+        const items=calDates[ds]||[];
+        return (
+          <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, backgroundColor:"rgba(0,0,0,0.8)", display:"flex", alignItems:"flex-start", justifyContent:"center", zIndex:300, paddingTop:"40px" }} onClick={()=>setSelDate(null)}>
+            <div style={{ backgroundColor:T.card, border:"2px solid "+T.primary, borderRadius:"12px", padding:"16px", width:"90%", maxWidth:"440px", maxHeight:"72vh", overflowY:"auto" }} onClick={(e)=>e.stopPropagation()}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"14px" }}>
+                <div style={{ fontSize:"12px", color:T.text, fontWeight:"bold" }}>{selDate.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric",year:"numeric"})}</div>
+                <button onClick={()=>setSelDate(null)} style={{ background:"none", border:"none", color:T.red, cursor:"pointer", fontSize:"22px", fontWeight:"bold" }}>✕</button>
+              </div>
+              {items.length===0 && <div style={{ color:"#3a6a4a", fontSize:"11px", textAlign:"center", padding:"20px" }}>No activity on this date</div>}
+              {items.filter((x)=>x.type==="trap").length>0 && <div style={{ fontSize:"9px", color:T.primary, fontWeight:"bold", marginBottom:"8px" }}>✅ TRAP CHECKED</div>}
+              {items.filter((x)=>x.type==="trap").map(({item}) => (
+                <div key={item.id} style={{ backgroundColor:T.deep, borderRadius:"6px", padding:"10px", marginBottom:"8px", borderLeft:"3px solid "+T.primary }}>
+                  <div style={{ display:"flex", justifyContent:"space-between" }}>
+                    <div style={{ fontSize:"11px", color:T.text, fontWeight:"bold" }}>{item.name}</div>
+                    <div style={{ fontSize:"8px", color:sc(item.status), fontWeight:"bold" }}>{item.status.toUpperCase()}</div>
+                  </div>
+                  <div style={{ fontSize:"9px", color:"#3a6a4a" }}>{item.location}{item.trapLocation?" - "+item.trapLocation:""}</div>
+                  {item.customerName && <button onClick={()=>{setSelDate(null);setCustModal(item.id);}} style={{ marginTop:"4px", backgroundColor:"transparent", border:"none", color:T.blue, fontSize:"9px", cursor:"pointer", padding:0, textAlign:"left" }}>👤 {item.customerName}</button>}
+                </div>
+              ))}
+              {items.filter((x)=>x.type==="check").length>0 && <div style={{ fontSize:"9px", color:T.amber, fontWeight:"bold", marginBottom:"8px", marginTop:"8px" }}>📅 SCHEDULED CHECK</div>}
+              {items.filter((x)=>x.type==="check").map(({item}) => (
+                <div key={"c"+item.id} style={{ backgroundColor:T.deep, borderRadius:"6px", padding:"10px", marginBottom:"8px", borderLeft:"3px solid "+T.amber }}>
+                  <div style={{ fontSize:"11px", color:T.text, fontWeight:"bold" }}>{item.name}</div>
+                  <div style={{ fontSize:"9px", color:"#3a6a4a" }}>{TRAP_LBL[item.type]||item.type} · {item.location}</div>
+                  {item.address && <div style={{ fontSize:"9px", color:"#3a6a4a" }}>🏠 {item.address}</div>}
+                  {item.customerName && <button onClick={()=>{setSelDate(null);setCustModal(item.id);}} style={{ marginTop:"4px", backgroundColor:"transparent", border:"none", color:T.blue, fontSize:"9px", cursor:"pointer", padding:0, textAlign:"left" }}>👤 {item.customerName} — tap for contact</button>}
+                  <div style={{ marginTop:"4px", fontSize:"9px", color:urgC(item.nextCheck), fontWeight:"bold" }}>Due: {daysUntil(item.nextCheck)}</div>
+                </div>
+              ))}
+              {items.filter((x)=>x.type==="insp").length>0 && <div style={{ fontSize:"9px", color:T.blue, fontWeight:"bold", marginBottom:"8px", marginTop:"8px" }}>📸 INSPECTION LOGGED</div>}
+              {items.filter((x)=>x.type==="insp").map(({item}) => (
+                <div key={item.id} style={{ backgroundColor:T.deep, borderRadius:"6px", padding:"10px", marginBottom:"8px", borderLeft:"3px solid "+T.blue }}>
+                  <div style={{ fontSize:"11px", color:T.text, fontWeight:"bold" }}>{item.location}</div>
+                  {item.client && <div style={{ fontSize:"9px", color:T.blue }}>{item.client}</div>}
+                  <div style={{ display:"inline-block", marginTop:"4px", backgroundColor:item.severity==="high"?T.red:item.severity==="medium"?T.amber:T.primary, color:T.bg, padding:"2px 7px", borderRadius:"3px", fontSize:"8px", fontWeight:"bold" }}>{item.severity.toUpperCase()}</div>
+                </div>
+              ))}
+              {items.filter((x)=>x.type==="followup").length>0 && <div style={{ fontSize:"9px", color:T.red, fontWeight:"bold", marginBottom:"8px", marginTop:"8px" }}>⚠️ FOLLOW-UP DUE</div>}
+              {items.filter((x)=>x.type==="followup").map(({item}) => (
+                <div key={"f"+item.id} style={{ backgroundColor:T.deep, borderRadius:"6px", padding:"10px", marginBottom:"8px", borderLeft:"3px solid "+T.red }}>
+                  <div style={{ fontSize:"11px", color:T.text, fontWeight:"bold" }}>{item.location}</div>
+                  {item.client && <div style={{ fontSize:"9px", color:T.blue }}>{item.client}</div>}
+                  <div style={{ fontSize:"9px", color:T.red, fontWeight:"bold", marginTop:"3px" }}>Follow-up {daysUntil(item.followUpDate)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
+      {zoomModal && (
+        <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, backgroundColor:"rgba(0,0,0,0.92)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1100 }} onClick={()=>setZoomModal(null)}>
+          <div style={{ backgroundColor:T.card, border:"2px solid "+T.primary, borderRadius:"14px", padding:"24px", width:"92%", maxWidth:"440px", maxHeight:"85vh", overflowY:"auto" }} onClick={(e)=>e.stopPropagation()}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"16px" }}>
+              <div style={{ fontSize:"12px", color:T.primary, fontWeight:"bold", letterSpacing:"1px" }}>{zoomModal.title}</div>
+              <button onClick={()=>setZoomModal(null)} style={{ background:"none", border:"none", color:T.red, cursor:"pointer", fontSize:"22px", fontWeight:"bold" }}>✕</button>
+            </div>
+            <div style={{ fontSize:"18px", color:T.text, lineHeight:"28px", letterSpacing:"0.3px" }}>{zoomModal.content}</div>
+            {zoomModal.items && zoomModal.items.map((item,i) => (
+              <div key={i} style={{ fontSize:"18px", color:T.text, lineHeight:"28px", marginBottom:"8px", paddingLeft:"12px", borderLeft:"2px solid "+T.primary+"55" }}>• {item}</div>
+            ))}
+            <button onClick={()=>setZoomModal(null)} style={{ marginTop:"20px", width:"100%", padding:"12px", backgroundColor:T.primary, border:"none", color:T.bg, borderRadius:"8px", cursor:"pointer", fontSize:"13px", fontWeight:"bold" }}>CLOSE</button>
+          </div>
+        </div>
+      )}
+
+      {activeTab==="inventory" && (
+        <button onClick={()=>{setEditId(null);setTrapForm(blankTrap);setShowTrapModal(true);}} style={{ position:"fixed", bottom:"72px", right:"20px", width:"52px", height:"52px", borderRadius:"50%", backgroundColor:T.primary, border:"none", color:T.bg, fontSize:"26px", cursor:"pointer", fontWeight:"bold", zIndex:90, boxShadow:"0 4px 18px "+T.primary+"55" }}>+</button>
+      )}
+
+      <div style={{ position:"fixed", bottom:0, left:0, right:0, backgroundColor:T.card, borderTop:"1px solid "+T.border, display:"flex", zIndex:100 }}>
+        {[["dashboard","🎯","HOME"],["inventory","📋","INV"],["calendar","📅","CAL"],["map","🗺️","MAP"],["inspection","📸","INSP"],["animals","🦊","WILD"],["tech","📱","TECH"],["settings","⚙️","SET"]].map(([tab,icon,label]) => (
+          <button key={tab} onClick={()=>setActiveTab(tab)} style={{ flex:1, padding:"8px 1px", backgroundColor:"transparent", border:"none", color:activeTab===tab?T.primary:"#3a6a4a", cursor:"pointer", fontSize:"9px", fontWeight:"bold", display:"flex", flexDirection:"column", alignItems:"center", gap:"2px" }}>
+            <span style={{ fontSize:"15px" }}>{icon}</span>{label}
+          </button>
+        ))}
+      </div>
+
+      {sendConfirmPopup ? (
+        <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, backgroundColor:"rgba(0,0,0,0.88)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1200 }} onClick={()=>setSendConfirmPopup(null)}>
+          <div style={{ backgroundColor:T.card, border:"2px solid "+T.blue, borderRadius:"14px", padding:"24px", width:"88%", maxWidth:"380px" }} onClick={e=>e.stopPropagation()}>
+            <div style={{ textAlign:"center", marginBottom:"18px" }}>
+              <div style={{ fontSize:"28px", marginBottom:"8px" }}>📨</div>
+              <div style={{ fontSize:"15px", color:"#ffffff", fontWeight:"bold", marginBottom:"4px" }}>Send Appointment Confirmation</div>
+              <div style={{ fontSize:"12px", color:"#a8d4b8" }}>{sendConfirmPopup.customerName} · <span style={{ color:T.primary, fontWeight:"bold" }}>{sendConfirmPopup.date}</span></div>
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:"8px", marginBottom:"10px" }}>
+              {sendConfirmPopup.phone ? (
+                <a href={"sms:"+sendConfirmPopup.phone+"?body="+sendConfirmPopup.smsBody} target="_blank" rel="noopener noreferrer" style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:"8px", padding:"14px", backgroundColor:T.primary, border:"none", borderRadius:"8px", color:T.bg, fontSize:"14px", fontWeight:"bold", textDecoration:"none" }}>
+                  📱 Send Text
+                </a>
+              ) : null}
+              {sendConfirmPopup.email && prefs.resendKey ? (
+                <button onClick={()=>sendConfirmEmail(false)} style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:"8px", padding:"14px", backgroundColor:"#EA4335", border:"none", borderRadius:"8px", color:"#ffffff", fontSize:"14px", fontWeight:"bold", cursor:"pointer", width:"100%" }}>
+                  ✉️ Send Email (via Resend)
+                </button>
+              ) : null}
+              {sendConfirmPopup.email && prefs.resendKey && prefs.anthropicKey ? (
+                <button onClick={()=>sendConfirmEmail(true)} style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:"8px", padding:"14px", backgroundColor:"#8b5cf6", border:"none", borderRadius:"8px", color:"#ffffff", fontSize:"14px", fontWeight:"bold", cursor:"pointer", width:"100%" }}>
+                  🤖 Send AI-Written Email
+                </button>
+              ) : null}
+              {sendConfirmPopup.phone && sendConfirmPopup.email && prefs.resendKey ? (
+                <button onClick={()=>{ const ph=sendConfirmPopup.phone; const sb=sendConfirmPopup.smsBody; window.open("sms:"+ph+"?body="+sb); sendConfirmEmail(prefs.anthropicKey?true:false); }} style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:"8px", padding:"14px", backgroundColor:T.blue+"22", border:"2px solid "+T.blue, borderRadius:"8px", color:T.blue, fontSize:"13px", fontWeight:"bold", cursor:"pointer", width:"100%" }}>
+                  📱+✉️ Send Both (Text + Auto Email)
+                </button>
+              ) : null}
+              {sendConfirmPopup.email && !prefs.resendKey ? (
+                <div style={{ padding:"12px", backgroundColor:T.amber+"15", border:"1px solid "+T.amber+"44", borderRadius:"8px", color:T.amber, fontSize:"11px", textAlign:"center" }}>
+                  ⚠️ Add your Resend API key in Settings to send email directly
+                </div>
+              ) : null}
+            </div>
+            <div style={{ fontSize:"8px", color:"#3a6a4a", textAlign:"center", marginBottom:"10px" }}>
+              {!prefs.resendKey ? "Add Resend API key in Settings to send email directly" : !prefs.anthropicKey ? "Add Anthropic key in Settings to enable AI emails" : "Emails send instantly — no Gmail needed"}
+            </div>
+            <button onClick={()=>setSendConfirmPopup(null)} style={{ width:"100%", padding:"12px", backgroundColor:T.deep, border:"1px solid "+T.border, color:"#a8d4b8", borderRadius:"8px", cursor:"pointer", fontSize:"12px", fontWeight:"bold" }}>Skip — Do Not Send</button>
+          </div>
+        </div>
+      ) : null}
+
+      {autoSendStatus ? (
+        <div style={{ position:"fixed", top:"20px", left:"50%", transform:"translateX(-50%)", backgroundColor:T.card, border:"2px solid "+(autoSendStatus.failed.length===0?T.primary:T.amber), borderRadius:"12px", padding:"16px 20px", zIndex:1400, minWidth:"280px", maxWidth:"90%", boxShadow:"0 8px 32px rgba(0,0,0,0.8)" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:"8px" }}>
+            <div style={{ fontSize:"12px", color:autoSendStatus.failed.length===0?T.primary:T.amber, fontWeight:"bold" }}>{autoSendStatus.failed.length===0 ? "✅ Reminders Sent" : "⚠️ Reminder Results"}</div>
+            <button onClick={()=>setAutoSendStatus(null)} style={{ background:"none", border:"none", color:T.red, cursor:"pointer", fontSize:"18px", fontWeight:"bold", marginLeft:"10px" }}>✕</button>
+          </div>
+          {autoSendStatus.sent.length>0 ? <div style={{ fontSize:"10px", color:T.primary, marginBottom:"4px" }}>✉️ Sent to: {autoSendStatus.sent.join(", ")}</div> : null}
+          {autoSendStatus.failed.length>0 ? <div style={{ fontSize:"10px", color:T.amber }}>⚠️ Failed: {autoSendStatus.failed.join(", ")}</div> : null}
+        </div>
+      ) : null}
+
+      {reminderQueue.length>0 ? (
+        <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, backgroundColor:"rgba(0,0,0,0.92)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1300, padding:"20px" }} onClick={()=>setReminderQueue([])}>
+          <div style={{ backgroundColor:T.card, border:"2px solid "+T.amber, borderRadius:"14px", padding:"20px", width:"100%", maxWidth:"400px", maxHeight:"85vh", overflowY:"auto" }} onClick={e=>e.stopPropagation()}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"12px" }}>
+              <div style={{ fontSize:"15px", color:T.amber, fontWeight:"bold" }}>⏰ Follow-Up Reminders</div>
+              <button onClick={()=>setReminderQueue([])} style={{ background:"none", border:"none", color:T.red, cursor:"pointer", fontSize:"22px", fontWeight:"bold" }}>✕</button>
+            </div>
+            <div style={{ backgroundColor:T.deep, borderRadius:"8px", padding:"4px", display:"flex", gap:"4px", marginBottom:"12px" }}>
+              <button onClick={()=>setEmailMode("generic")} style={{ flex:1, padding:"9px", borderRadius:"6px", border:"none", backgroundColor:emailMode==="generic"?T.primary:T.deep, color:emailMode==="generic"?T.bg:T.text, cursor:"pointer", fontSize:"10px", fontWeight:"bold" }}>📋 Generic</button>
+              <button onClick={()=>setEmailMode("ai")} style={{ flex:1, padding:"9px", borderRadius:"6px", border:"none", backgroundColor:emailMode==="ai"?"#8b5cf6":T.deep, color:emailMode==="ai"?T.bg:T.text, cursor:"pointer", fontSize:"10px", fontWeight:"bold" }}>🤖 AI-Tailored</button>
+            </div>
+            {reminderQueue.map(trap=>{
+              const phone=(trap.customerPhone||"").replace(/[^\d+]/g,"");
+              const smsMsg=encodeURIComponent("Hi "+(trap.customerName||"there")+" - Guardian Systems reminder. Your trap at "+(trap.address||trap.location)+" is due for a service check. We will contact you shortly. Thank you!");
+              const zoomItems = [
+                trap.customerName ? "👤 "+trap.customerName : null,
+                trap.address ? "🏠 "+trap.address : (trap.location ? "📍 "+trap.location : null),
+                trap.customerPhone ? "📞 "+trap.customerPhone : null,
+                trap.caughtAnimal ? "🐾 Animal: "+trap.caughtAnimal : "🎯 Trap: "+(TRAP_LBL[trap.type]||trap.type),
+                trap.trapLocation ? "📍 "+trap.trapLocation : null,
+                "📅 Last checked: "+(trap.lastChecked||"unknown"),
+                trap.nextCheck ? "🔔 Due: "+trap.nextCheck : null,
+              ].filter(Boolean);
+              return (
+                <div key={trap.id} onClick={()=>setZoomModal({title:"📋 "+trap.name, items:zoomItems})} style={{ backgroundColor:T.deep, borderRadius:"8px", padding:"12px", marginBottom:"10px", border:"1px solid "+T.amber+"33", cursor:"pointer" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:"6px" }}>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:"12px", color:"#ffffff", fontWeight:"bold" }}>{trap.name} <span style={{ fontSize:"9px", color:T.primary+"88" }}>🔍 tap to zoom</span></div>
+                      {trap.customerName ? <div style={{ fontSize:"11px", color:T.blue, marginTop:"2px" }}>👤 {trap.customerName}</div> : null}
+                      {(trap.address||trap.location) ? <div onClick={e=>{e.stopPropagation();setActiveTab("map");setReminderQueue([]);}} style={{ fontSize:"9px", color:T.blue, marginTop:"2px", textDecoration:"underline", cursor:"pointer" }}>🗺️ {trap.address||trap.location}</div> : null}
+                      {trap.caughtAnimal ? <div style={{ fontSize:"9px", color:T.amber, marginTop:"2px" }}>🐾 {trap.caughtAnimal}</div> : <div style={{ fontSize:"9px", color:"#a8d4b8", marginTop:"2px" }}>🎯 {TRAP_LBL[trap.type]||trap.type}</div>}
+                    </div>
+                  </div>
+                  <div style={{ display:"flex", gap:"6px", flexWrap:"wrap" }}>
+                    {phone ? <a href={"tel:"+phone} onClick={e=>e.stopPropagation()} style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:"5px", padding:"9px 6px", backgroundColor:T.primary+"22", border:"1px solid "+T.primary+"44", borderRadius:"6px", color:T.primary, fontSize:"10px", fontWeight:"bold", textDecoration:"none", minWidth:"50px" }}>📞 Call</a> : null}
+                    {phone ? <a href={"sms:"+phone+"?body="+smsMsg} onClick={e=>{e.stopPropagation();remindLog.current[trap.id]=today;setReminderQueue(q=>q.filter(t=>t.id!==trap.id));}} style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:"5px", padding:"9px 6px", backgroundColor:T.blue+"22", border:"1px solid "+T.blue+"44", borderRadius:"6px", color:T.blue, fontSize:"10px", fontWeight:"bold", textDecoration:"none", minWidth:"50px" }}>📱 Text</a> : null}
+                    {trap.customerEmail ? <a href={"mailto:"+trap.customerEmail} onClick={e=>e.stopPropagation()} style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:"5px", padding:"9px 6px", backgroundColor:"#EA4335"+"22", border:"1px solid #EA433544", borderRadius:"6px", color:"#EA4335", fontSize:"10px", fontWeight:"bold", textDecoration:"none", minWidth:"50px" }}>✉️ Email</a> : null}
+                    <button onClick={e=>{e.stopPropagation();remindLog.current[trap.id]=today;setReminderQueue(q=>q.filter(t=>t.id!==trap.id));}} style={{ flex:1, padding:"9px 6px", backgroundColor:T.deep, border:"1px solid "+T.border, borderRadius:"6px", color:"#a8d4b8", fontSize:"9px", fontWeight:"bold", cursor:"pointer", minWidth:"50px" }}>Skip</button>
+                  </div>
+                </div>
+              );
+            })}
+            <button onClick={()=>sendAutoReminders(reminderQueue)} style={{ width:"100%", padding:"13px", backgroundColor:emailMode==="ai"?"#8b5cf6":T.primary, border:"none", color:T.bg, borderRadius:"8px", cursor:"pointer", fontSize:"12px", fontWeight:"bold", marginTop:"4px", marginBottom:"6px" }}>
+              {emailMode==="ai"?"🤖 Send AI Emails":"📧 Send Reminders"} ({reminderQueue.filter(t=>t.customerEmail).length})
+            </button>
+            <button onClick={()=>setReminderQueue([])} style={{ width:"100%", padding:"11px", backgroundColor:T.deep, border:"1px solid "+T.border, color:"#a8d4b8", borderRadius:"8px", cursor:"pointer", fontSize:"11px", fontWeight:"bold" }}>Dismiss All</button>
+          </div>
+        </div>
+      ) : null}
+
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<TrapTrack />);
+  </script>
+</body>
+</html>
